@@ -23,9 +23,9 @@ export default function DiscoveryScreen() {
     try {
       const res = await projectSubmissionService.getAllProjects();
       if (res.statusCode === 200 && res.data && res.data.items) {
-        // Filter for published projects and map to UI model matching Web logic
+        // Filter for approved projects and map to UI model matching Web logic
         const publishedProjects = res.data.items
-          .filter(p => p.status === 'Published')
+          .filter(p => p.status === 'Approved')
           .map(p => ({
             ...p,
             id: p.projectId,
@@ -39,7 +39,7 @@ export default function DiscoveryScreen() {
               ? p.keySkills.split(',').map(s => s.trim()).filter(Boolean)
               : [],
             aiScore: p.score || 0,
-            timestamp: p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('vi-VN') : 'Mới',
+            timestamp: p.approvedAt ? new Date(p.approvedAt).toLocaleDateString('vi-VN') : 'Mới',
             logo: null // For now, projects in API don't have separate logos in this endpoint
           }));
 
