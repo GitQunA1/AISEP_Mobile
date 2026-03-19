@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
-import { Check, AlertCircle, Camera, FileText, Globe, Building2, User, Phone } from 'lucide-react-native';
+import { Check, AlertCircle, Camera, FileText, Globe, Building2, User, Phone, MapPin } from 'lucide-react-native';
 import startupProfileService from '../services/startupProfileService';
-import THEME from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 const INDUSTRIES = [
   'Fintech', 'Edtech', 'Healthtech', 'Agritech', 'E-Commerce', 
@@ -11,6 +11,8 @@ const INDUSTRIES = [
 ];
 
 export default function StartupProfileForm({ initialData, user, onSuccess, onCancel }) {
+  const { activeTheme } = useTheme();
+  const colors = activeTheme.colors;
   const [formData, setFormData] = useState({
     companyName: '',
     logoUrl: '',
@@ -93,11 +95,20 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
 
   const renderInput = (label, name, icon, placeholder, keyboardType = 'default') => (
     <View style={styles.formGroup}>
-      <Text style={styles.label}>{label} <Text style={{color: '#ef4444'}}>*</Text></Text>
-      <View style={[styles.inputContainer, errors[name] && styles.inputError]}>
-        {icon}
+      <Text style={[styles.label, { color: colors.text }]}>
+        {label} <Text style={{ color: colors.error }}>*</Text>
+      </Text>
+      <View style={[
+        styles.inputContainer, 
+        { 
+          backgroundColor: colors.inputBackground, 
+          borderColor: colors.inputBorder 
+        },
+        errors[name] && { borderColor: colors.error }
+      ]}>
+        {React.cloneElement(icon, { color: colors.secondaryText })}
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: colors.text }]}
           placeholder={placeholder}
           value={String(formData[name])}
           onChangeText={(text) => {
@@ -105,57 +116,81 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
             if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
           }}
           keyboardType={keyboardType}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.secondaryText}
         />
       </View>
-      {errors[name] && <Text style={styles.errorText}>{errors[name]}</Text>}
+      {errors[name] && <Text style={[styles.errorText, { color: colors.error }]}>{errors[name]}</Text>}
     </View>
   );
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.card}>
-        <Text style={styles.title}>{initialData ? 'Cập nhật Profile' : 'Tạo Hồ sơ Startup'}</Text>
-        <Text style={styles.subtitle}>Điền thông tin doanh nghiệp của bạn</Text>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]} 
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      overScrollMode="never"
+    >
+      <View style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.shadow }]}>
+        <Text style={[styles.title, { color: colors.text }]}>{initialData ? 'Cập nhật Profile' : 'Tạo Hồ sơ Startup'}</Text>
+        <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Điền thông tin doanh nghiệp của bạn</Text>
 
         {errors.submit && (
-          <View style={styles.errorBanner}>
-            <AlertCircle size={18} color="#ef4444" />
-            <Text style={styles.errorBannerText}>{errors.submit}</Text>
+          <View style={[styles.errorBanner, { backgroundColor: colors.error + '15' }]}>
+            <AlertCircle size={18} color={colors.error} />
+            <Text style={[styles.errorBannerText, { color: colors.error }]}>{errors.submit}</Text>
           </View>
         )}
 
-        {renderInput('Tên công ty', 'companyName', <Building2 size={18} color="#64748B" />, 'Ví dụ: TechStartup VN')}
-        {renderInput('Người sáng lập', 'founder', <User size={18} color="#64748B" />, 'Tên của bạn')}
-        {renderInput('Thông tin liên hệ', 'contactInfo', <Phone size={18} color="#64748B" />, 'Email hoặc số điện thoại', 'email-address')}
-        {renderInput('Địa phương', 'countryCity', <MapPin size={18} color="#64748B" />, 'Tỉnh/Thành phố')}
-        {renderInput('Website', 'website', <Globe size={18} color="#64748B" />, 'https://example.com', 'url')}
+        {renderInput('Tên công ty', 'companyName', <Building2 size={18} />, 'Ví dụ: TechStartup VN')}
+        {renderInput('Người sáng lập', 'founder', <User size={18} />, 'Tên của bạn')}
+        {renderInput('Thông tin liên hệ', 'contactInfo', <Phone size={18} />, 'Email hoặc số điện thoại', 'email-address')}
+        {renderInput('Địa phương', 'countryCity', <Building2 size={18} />, 'Tỉnh/Thành phố')}
+        {renderInput('Website', 'website', <Globe size={18} />, 'https://example.com', 'url')}
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Lĩnh vực</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Lĩnh vực</Text>
           <View style={styles.industryGrid}>
-            {INDUSTRIES.map((ind, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.industryItem, formData.industry === idx && styles.industryItemSelected]}
-                onPress={() => setFormData(prev => ({ ...prev, industry: idx }))}
-              >
-                <Text style={[styles.industryText, formData.industry === idx && styles.industryTextSelected]}>
-                  {ind}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {INDUSTRIES.map((ind, idx) => {
+              const isSelected = formData.industry === idx;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    styles.industryItem, 
+                    { 
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      backgroundColor: isSelected ? colors.primary : 'transparent'
+                    }
+                  ]}
+                  onPress={() => setFormData(prev => ({ ...prev, industry: idx }))}
+                >
+                  <Text style={[
+                    styles.industryText, 
+                    { 
+                      color: isSelected ? '#fff' : colors.secondaryText,
+                      fontWeight: isSelected ? '600' : '400'
+                    }
+                  ]}>
+                    {ind}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
         <View style={styles.actions}>
           {onCancel && (
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={isLoading}>
-              <Text style={styles.cancelText}>Hủy</Text>
+              <Text style={[styles.cancelText, { color: colors.secondaryText }]}>Hủy</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity 
-            style={[styles.submitBtn, isLoading && styles.disabledBtn]} 
+            style={[
+              styles.submitBtn, 
+              { backgroundColor: colors.primary },
+              isLoading && styles.disabledBtn
+            ]} 
             onPress={handleSubmit} 
             disabled={isLoading}
           >
@@ -176,32 +211,24 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, margin: 16, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  title: { fontSize: 20, fontWeight: '800', color: '#1E293B', marginBottom: 4 },
-  subtitle: { fontSize: 13, color: '#64748B', marginBottom: 24 },
+  container: { flex: 1 },
+  card: { borderRadius: 16, padding: 20, margin: 16, elevation: 3, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6 },
+  title: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  subtitle: { fontSize: 13, marginBottom: 24 },
   formGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 8 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, height: 48 },
-  input: { flex: 1, marginLeft: 10, fontSize: 15, color: '#1E293B' },
-  inputError: { borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
-  errorBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, marginBottom: 20 },
-  errorBannerText: { color: '#ef4444', fontSize: 13, marginLeft: 8, flex: 1 },
+  label: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 52 },
+  input: { flex: 1, marginLeft: 10, fontSize: 15 },
+  errorText: { fontSize: 12, marginTop: 4, fontWeight: '500' },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 20 },
+  errorBannerText: { fontSize: 13, marginLeft: 8, flex: 1, fontWeight: '500' },
   industryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
-  industryItem: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', margin: 4, backgroundColor: '#fff' },
-  industryItemSelected: { backgroundColor: THEME.colors.primary, borderColor: THEME.colors.primary },
-  industryText: { fontSize: 12, color: '#64748B' },
-  industryTextSelected: { color: '#fff', fontWeight: '600' },
-  actions: { flexDirection: 'row', marginTop: 10 },
-  cancelBtn: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  cancelText: { fontSize: 15, color: '#64748B', fontWeight: '600' },
-  submitBtn: { flex: 2, height: 48, backgroundColor: THEME.colors.primary, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  submitText: { color: '#fff', fontSize: 15, fontWeight: '700', marginLeft: 8 },
-  disabledBtn: { opacity: 0.7 },
-  MapPin: { width: 18, height: 18 } // Placeholder for missing import if any
+  industryItem: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, margin: 4 },
+  industryText: { fontSize: 12 },
+  actions: { flexDirection: 'row', marginTop: 10, gap: 12 },
+  cancelBtn: { flex: 1, height: 50, alignItems: 'center', justifyContent: 'center' },
+  cancelText: { fontSize: 15, fontWeight: '700' },
+  submitBtn: { flex: 2, height: 50, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  submitText: { color: '#fff', fontSize: 15, fontWeight: '800', marginLeft: 8 },
+  disabledBtn: { opacity: 0.7 }
 });
-
-const MapPin = ({ size, color }) => (
-  <Building2 size={size} color={color} /> // Simplified fallback for location icon
-);

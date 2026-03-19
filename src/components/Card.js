@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
-const Card = ({ children, style, variant = 'default' }) => {
+const Card = ({ children, style, variant = 'default', onPress }) => {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const radius = activeTheme.radius;
@@ -28,7 +28,7 @@ const Card = ({ children, style, variant = 'default' }) => {
     }
   });
 
-  return (
+  const content = (
     <View style={[
       cardStyles.card, 
       cardStyles[variant],
@@ -37,6 +37,16 @@ const Card = ({ children, style, variant = 'default' }) => {
       {children}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
 };
 
 export default Card;

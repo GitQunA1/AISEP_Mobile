@@ -1,71 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator, RefreshControl } from 'react-native';
-import { Search, MapPin, Star, CheckCircle, DollarSign, Users } from 'lucide-react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, Text, StyleSheet, FlatList, TextInput, 
+  TouchableOpacity, RefreshControl, Animated, 
+  ActivityIndicator, Platform 
+} from 'react-native';
+import { Search, Plus, Users, X } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+
 import advisorService from '../../src/services/advisorService';
 import bookingService from '../../src/services/bookingService';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
-import Card from '../../src/components/Card';
-import { useRouter } from 'expo-router';
+import AdvisorCard from '../../src/components/advisor/AdvisorCard';
+import AdvisorSkeletonCard from '../../src/components/advisor/AdvisorSkeletonCard';
 import AdvisorBookingModal from '../../src/components/AdvisorBookingModal';
+
+import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
 
 export default function AdvisorsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+
   const [advisors, setAdvisors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [myBookings, setMyBookings] = useState([]);
   
+  // Search Bar Animation
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchBorderAnim = useRef(new Animated.Value(0)).current;
+
   // Modal state
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedAdvisorForBooking, setSelectedAdvisorForBooking] = useState(null);
 
   const roleValue = user?.role;
   const roleStr = typeof roleValue === 'string' ? roleValue.toLowerCase() : '';
-  const canConnect = roleStr === 'startup' || roleStr === 'investor' || roleValue === 0 || roleValue === 1;
+  const isStartupRole = roleValue === 0 || roleStr === 'startup';
 
-  const fetchAdvisors = async () => {
+  const fetchData = async () => {
     try {
-      const response = await advisorService.getAllAdvisors();
-      const items = response?.data?.items || response?.items || [];
+      const [advisorsRes, bookingsRes] = await Promise.all([
+        advisorService.getAllAdvisors(),
+        user?.userId ? bookingService.getMyCustomerBookings(user.userId) : Promise.resolve([])
+      ]);
+
+      const items = advisorsRes?.data?.items || advisorsRes?.items || [];
       setAdvisors(items);
+
+      const bookingItems = bookingsRes?.items || bookingsRes?.data?.items || bookingsRes || [];
+      if (Array.isArray(bookingItems)) setMyBookings(bookingItems);
     } catch (err) {
-      console.error('Failed to load advisors:', err);
+      console.error('Failed to load data:', err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
-  const fetchMyBookings = async () => {
-    const userId = user?.userId || user?.userId; // Adjust based on AuthContext user object
-    if (!userId) return;
-    try {
-      const response = await bookingService.getMyCustomerBookings(userId);
-      const items = response?.items || response?.data?.items || response || [];
-      if (Array.isArray(items)) setMyBookings(items);
-    } catch (err) {
-      console.error('Failed to load user bookings:', err);
-    }
-  };
-
   useEffect(() => {
-    fetchAdvisors();
-    fetchMyBookings();
+    fetchData();
   }, [user]);
 
   const onRefresh = () => {
     setIsRefreshing(true);
-    fetchAdvisors();
-    fetchMyBookings();
+    fetchData();
   };
 
   const handleConnect = (advisor) => {
-    if (!canConnect) {
+    if (!isStartupRole && roleValue !== 1 && roleStr !== 'investor') {
       alert('Chỉ Startup hoặc Investor mới có thể kết nối với cố vấn.');
       return;
     }
@@ -87,149 +94,185 @@ export default function AdvisorsScreen() {
     return booking ? booking.status : null;
   };
 
-  const renderAdvisorItem = ({ item }) => {
-    const expertises = item.expertise ? item.expertise.split(',').map(s => s.trim()) : [];
-    const status = getBookingStatus(item.advisorId);
-    
-    return (
-      <Card style={styles.advisorCard}>
-        <View style={styles.cardHeader}>
-          <Image 
-            source={{ uri: item.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.userName)}&background=random` }} 
-            style={styles.avatar} 
-          />
-          <View style={styles.info}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.name, { color: colors.text }]}>{item.userName}</Text>
-              {item.approvalStatus === 'Approved' && <CheckCircle size={14} color={colors.primary} style={{marginLeft: 4}} />}
-            </View>
-            <View style={styles.expertiseContainer}>
-              {expertises.slice(0, 3).map((exp, idx) => (
-                <View key={idx} style={styles.tag}>
-                  <Text style={styles.tagText}>{exp}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
+  // Search Border Animation
+  useEffect(() => {
+    Animated.timing(searchBorderAnim, {
+      toValue: isSearchFocused ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isSearchFocused]);
 
-        <Text style={[styles.bio, { color: colors.text }]} numberOfLines={2}>
-          {item.bio || 'Chưa có thông tin giới thiệu.'}
-        </Text>
-
-        <View style={styles.metadata}>
-          <View style={styles.metaItem}>
-            <MapPin size={12} color={colors.secondaryText} />
-            <Text style={[styles.metaText, { color: colors.secondaryText }]}>{item.location || 'Nghề nghiệp tự do'}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <DollarSign size={12} color={colors.secondaryText} />
-            <Text style={[styles.metaText, { color: colors.secondaryText }]}>{item.hourlyRate?.toLocaleString('vi-VN')} đ/h</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Star size={12} color={colors.warning} fill={colors.warning} />
-            <Text style={[styles.metaText, { color: colors.secondaryText }]}>{item.rating || 0}</Text>
-          </View>
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity 
-            style={[styles.viewProfileBtn, { borderColor: colors.border }]}
-            onPress={() => router.push(`/advisor/${item.advisorId}`)}
-          >
-            <Text style={[styles.viewProfileText, { color: colors.text }]}>Hồ sơ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[
-              styles.connectBtn, 
-              { backgroundColor: colors.primary },
-              (status === 0 || status === 'Pending') && { backgroundColor: colors.secondaryText },
-              (status === 1 || status === 'Confirmed' || status === 'Accepted') && { backgroundColor: '#10b981' }
-            ]}
-            disabled={status !== null}
-            onPress={() => handleConnect(item)}
-          >
-            <Text style={[styles.connectText, status !== null && {color: '#fff'}]}>
-              {status === 0 || status === 'Pending' ? 'Đang chờ' : 
-               status === 1 || status === 'Confirmed' || status === 'Accepted' ? 'Đã kết nối' : 'Kết nối'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Card>
-    );
-  };
+  const borderColor = searchBorderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.border, colors.primary],
+  });
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.secondaryBackground }]}>
-      <View style={[styles.searchSection, { backgroundColor: colors.background }]}>
-        <View style={[styles.searchContainer, { backgroundColor: colors.secondaryBackground }]}>
-          <Search size={20} color={colors.secondaryText} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Tìm kiếm theo tên hoặc chuyên môn"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={colors.secondaryText}
-          />
+    <TabScreenWrapper>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Unified SEARCH BAR with Home's filter/input style */}
+        <View style={styles.searchSection}>
+          <Animated.View style={[
+            styles.searchContainer, 
+            { 
+              backgroundColor: colors.inputBackground, 
+              borderColor: borderColor 
+            }
+          ]}>
+            <Search size={16} color={colors.secondaryText} style={{ marginRight: 8 }} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Tìm theo tên hoặc chuyên môn..."
+              placeholderTextColor={colors.secondaryText}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10}>
+                  <X size={16} color={colors.secondaryText} />
+              </TouchableOpacity>
+            )}
+          </Animated.View>
         </View>
-      </View>
 
-      <FlatList
-        data={filteredAdvisors}
-        renderItem={renderAdvisorItem}
-        keyExtractor={(item) => item.advisorId.toString()}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          isLoading ? (
-            <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+        <FlatList
+          data={isLoading ? [1, 2, 3] : filteredAdvisors}
+          renderItem={({ item }) => isLoading ? (
+            <AdvisorSkeletonCard />
           ) : (
-            <View style={styles.emptyState}>
-              <Users size={48} color={colors.border} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Không tìm thấy cố vấn</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.secondaryText }]}>Hãy thử tìm kiếm từ khóa khác.</Text>
-            </View>
-          )
-        }
-      />
-
-      {showBookingModal && (
-        <AdvisorBookingModal
-          isVisible={showBookingModal}
-          advisor={selectedAdvisorForBooking}
-          onClose={() => setShowBookingModal(false)}
-          onSuccess={handleBookingSuccess}
+            <AdvisorCard 
+              advisor={item} 
+              bookingStatus={getBookingStatus(item.advisorId)}
+              onViewProfile={(id) => router.push(`/advisor/${id}`)}
+              onConnect={handleConnect}
+            />
+          )}
+          keyExtractor={(item, index) => isLoading ? index.toString() : item.advisorId.toString()}
+          contentContainerStyle={styles.list}
+          bounces={false}
+          overScrollMode="never"
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          refreshControl={
+              <RefreshControl 
+                  refreshing={isRefreshing} 
+                  onRefresh={onRefresh} 
+                  tintColor={colors.primary}
+              />
+          }
+          ListEmptyComponent={
+            !isLoading && (
+              <View style={styles.emptyState}>
+                <Users size={48} color={colors.border} />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>Không tìm thấy cố vấn</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.secondaryText }]}>Hãy thử tìm kiếm từ khóa khác.</Text>
+              </View>
+            )
+          }
         />
-      )}
-    </View>
+
+        {showBookingModal && (
+          <AdvisorBookingModal
+            isVisible={showBookingModal}
+            advisor={selectedAdvisorForBooking}
+            onClose={() => setShowBookingModal(false)}
+            onSuccess={handleBookingSuccess}
+          />
+        )}
+      </View>
+    </TabScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  searchSection: { padding: 16 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', borderRadius: 22, paddingHorizontal: 16, height: 44 },
-  searchInput: { flex: 1, marginLeft: 8, fontSize: 15 },
-  list: { padding: 16 },
-  advisorCard: { marginBottom: 16, padding: 16 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  avatar: { width: 56, height: 56, borderRadius: 28 },
-  info: { flex: 1, marginLeft: 12 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  name: { fontSize: 16, fontWeight: '700' },
-  expertiseContainer: { flexDirection: 'row', flexWrap: 'wrap' },
-  tag: { backgroundColor: 'rgba(29, 155, 240, 0.05)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginRight: 4, marginBottom: 4 },
-  tagText: { fontSize: 11, color: '#1d9bf0', fontWeight: '600' },
-  bio: { fontSize: 14, lineHeight: 20, marginBottom: 16 },
-  metadata: { flexDirection: 'row', marginBottom: 16 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', marginRight: 16 },
-  metaText: { fontSize: 12, marginLeft: 4 },
-  actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 16 },
-  viewProfileBtn: { flex: 1, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#cfd9de', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  viewProfileText: { fontWeight: '600', fontSize: 14 },
-  connectBtn: { flex: 2, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  connectText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', marginTop: 16 },
-  emptySubtitle: { fontSize: 14, marginTop: 8 },
+  container: { 
+    flex: 1,
+    paddingTop: 10, // Match Home's container paddingTop
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 8, // Match FeedHeader's paddingTop
+    paddingBottom: 0,
+    marginBottom: 6, // Match FeedHeader's marginBottom
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  ctaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  ctaText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    marginLeft: 6,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    paddingHorizontal: 20,
+    paddingBottom: 10, // Match FeedHeader's subtitle marginBottom
+    marginTop: 0, // Match FeedHeader's subtitle gap
+    lineHeight: 18,
+  },
+  searchSection: { 
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderRadius: 24, 
+    paddingHorizontal: 16, 
+    paddingVertical: Platform.OS === 'ios' ? 11 : 4,
+    borderWidth: 1.5,
+  },
+  searchInput: { 
+    flex: 1, 
+    fontSize: 14,
+  },
+  list: { 
+    paddingBottom: 100,
+    paddingTop: 8,
+  },
+  separator: {
+    height: 12,
+  },
+  emptyState: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    marginTop: 16,
+  },
+  emptySubtitle: { 
+    fontSize: 14, 
+    marginTop: 8,
+    textAlign: 'center',
+  },
 });

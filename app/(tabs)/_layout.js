@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import { Home, MessageSquare, Users, User, LayoutDashboard, Target } from "lucide-react-native";
 import { useAuth } from "../../src/context/AuthContext";
 import { useTheme } from "../../src/context/ThemeContext";
+import CustomTabBar from "../../src/components/navigation/CustomTabBar";
 
 export default function TabsLayout() {
   const { user } = useAuth();
@@ -9,30 +10,28 @@ export default function TabsLayout() {
   const colors = activeTheme.colors;
 
   return (
-    <Tabs screenOptions={{
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.secondaryText,
-      tabBarStyle: {
-        backgroundColor: colors.background,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        height: 60,
-        paddingBottom: 8,
-      },
-      headerStyle: {
-        backgroundColor: colors.background,
-      },
-      headerTitleStyle: {
-        fontWeight: '700',
-        color: colors.text,
-      },
-    }}>
+    <Tabs 
+      tabBar={(props) => <CustomTabBar {...props} />}
+      sceneContainerStyle={{ backgroundColor: colors.background }} // Fix white flash
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: colors.background,
+        },
+        headerTitleStyle: {
+          fontWeight: '700',
+          fontSize: 18,
+          color: colors.text,
+        },
+        headerTitleAlign: 'left',
+        headerShadowVisible: false,
+      }}
+    >
       <Tabs.Screen 
         name="index" 
         options={{
           title: "Khám phá",
           tabBarIcon: ({ color }) => <Home size={24} color={color} />,
-          headerTitle: "AISEP Discovery",
+          headerTitle: "Khám phá dự án",
         }} 
       />
       <Tabs.Screen 
@@ -40,7 +39,7 @@ export default function TabsLayout() {
         options={{
           title: "Cố vấn",
           tabBarIcon: ({ color }) => <Users size={24} color={color} />,
-          headerTitle: "Đội ngũ cố vấn",
+          headerTitle: "Tìm cố vấn",
         }} 
       />
       <Tabs.Screen 
@@ -56,13 +55,13 @@ export default function TabsLayout() {
         options={{
           title: "AI Chat",
           tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
-          headerTitle: "AI Trợ lý ảo",
+          headerTitle: "AI Hub",
         }} 
       />
       <Tabs.Screen 
         name="dashboard" 
         options={{
-          title: "Trình quản lý",
+          title: "Quản lý", 
           tabBarIcon: ({ color }) => <LayoutDashboard size={24} color={color} />,
           headerTitle: "Bảng điều khiển",
           href: user ? "/dashboard" : null,
@@ -73,7 +72,7 @@ export default function TabsLayout() {
         options={{
           title: "Cá nhân",
           tabBarIcon: ({ color }) => <User size={24} color={color} />,
-          headerTitle: "Hồ sơ của bạn",
+          headerTitle: "Hồ sơ cá nhân",
         }} 
       />
     </Tabs>

@@ -47,7 +47,12 @@ export const projectSubmissionService = {
     return response;
   },
 
-  uploadDocument: async (projectId, file) => {
+  getDocuments: async (projectId) => {
+    const response = await apiClient.get(`/api/projects/${projectId}/documents`);
+    return response;
+  },
+
+  uploadDocument: async (projectId, file, documentType = 'PitchDeck') => {
     const formData = new FormData();
     // In React Native, file should be { uri, name, type }
     formData.append('file', file);
@@ -88,6 +93,16 @@ export const projectSubmissionService = {
 
   getAllProjects: async () => {
     const response = await apiClient.get('/api/Projects');
+    return response;
+  },
+
+  submitProject: async (projectId) => {
+    const response = await apiClient.patch(`/api/Projects/${projectId}/submit`);
+    return response;
+  },
+
+  verifyDocument: async (documentId) => {
+    const response = await apiClient.get(`/api/documents/${documentId}/verify`);
     return response;
   }
 };

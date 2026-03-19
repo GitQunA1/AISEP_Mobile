@@ -1,30 +1,49 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { 
+  View, Text, StyleSheet, Modal, TouchableOpacity, 
+  TextInput, Alert, ActivityIndicator, Platform, 
+  ScrollView, KeyboardAvoidingView, Pressable, Dimensions 
+} from 'react-native';
 import { X, Calendar as CalendarIcon, Clock, AlertCircle } from 'lucide-react-native';
 import bookingService from '../services/bookingService';
-import THEME from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuccess }) {
-  const [bookingDate, setBookingDate] = useState('');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
+  const { activeTheme } = useTheme();
+  const colors = activeTheme.colors;
+
+  const [formData, setFormData] = useState({
+    bookingDate: '',
+    startTime: '09:00',
+    endTime: '10:00',
+  });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const initial = (advisor?.userName || 'A').charAt(0).toUpperCase();
+
+  const handleInputChange = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (error) setError('');
+  };
+
   const handleSubmit = async () => {
-    if (!bookingDate) {
-      setError('Vui lòng nhập ngày hẹn (YYYY-MM-DD)');
+    if (!formData.bookingDate) {
+      setError('Vui lòng nhập ngày hẹn');
       return;
     }
     
-    // Basic date format validation
+    // Basic date format validation (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(bookingDate)) {
+    if (!dateRegex.test(formData.bookingDate)) {
       setError('Định dạng ngày không hợp lệ (YYYY-MM-DD)');
       return;
     }
 
-    if (startTime >= endTime) {
+    if (formData.startTime >= formData.endTime) {
       setError('Thời gian kết thúc phải sau thời gian bắt đầu');
       return;
     }
@@ -33,13 +52,14 @@ export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuc
     setError('');
 
     try {
-      const startDateTime = `${bookingDate}T${startTime}:00Z`;
-      const endDateTime = `${bookingDate}T${endTime}:00Z`;
+      // Replicate web's Date logic
+      const startDateTime = new Date(`${formData.bookingDate}T${formData.startTime}:00`);
+      const endDateTime = new Date(`${formData.bookingDate}T${formData.endTime}:00`);
       
       const payload = {
         advisorId: advisor.advisorId,
-        startTime: startDateTime,
-        endTime: endDateTime
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString()
       };
 
       await bookingService.createBooking(payload);
@@ -57,7 +77,6 @@ export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuc
     }
   };
 
-  // Get tomorrow's date as a hint
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dateHint = tomorrow.toISOString().split('T')[0];
@@ -70,96 +89,134 @@ export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuc
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <Pressable style={styles.dismissArea} onPress={onClose} />
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={[styles.content, { backgroundColor: colors.card }]}
+        >
+          {/* DRAG HANDLE */}
+          <View style={styles.dragHandleContainer}>
+              <View style={[styles.dragHandle, { backgroundColor: activeTheme.isDark ? '#555' : '#ccc' }]} />
+          </View>
+
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Đặt Hẹn Cố Vấn</Text>
-              <Text style={styles.subtitle}>Gửi yêu cầu kết nối</Text>
+              <Text style={[styles.title, { color: colors.text }]}>Đặt Hẹn Cố Vấn</Text>
+              <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Gửi yêu cầu và sắp xếp lịch trình</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={24} color={THEME.colors.text} />
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={20}>
+              <X size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.advisorBrief}>
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{(advisor?.userName || 'A').charAt(0)}</Text>
+          <ScrollView 
+            style={styles.scrollBody} 
+            showsVerticalScrollIndicator={false} 
+            bounces={false}
+            overScrollMode="never"
+          >
+            {/* ADVISOR PREVIEW */}
+            <View style={[styles.advisorBrief, { backgroundColor: colors.mutedBackground }]}>
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                {advisor?.profileImage ? (
+                    <Image source={{ uri: advisor.profileImage }} style={styles.avatarImg} />
+                ) : (
+                    <Text style={styles.avatarText}>{initial}</Text>
+                )}
+              </View>
+              <View style={styles.advisorInfo}>
+                <Text style={[styles.advisorName, { color: colors.text }]}>{advisor?.userName}</Text>
+                <Text style={[styles.advisorExpertise, { color: colors.secondaryText }]}>
+                    {advisor?.expertise || 'Cố vấn chuyên gia'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.advisorInfo}>
-              <Text style={styles.advisorName}>{advisor?.userName}</Text>
-              <Text style={styles.advisorExpertise}>{advisor?.expertise || 'Chuyên gia cố vấn'}</Text>
-            </View>
-          </View>
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <AlertCircle size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+            {error ? (
+              <View style={[styles.errorBox, { backgroundColor: activeTheme.isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }]}>
+                <AlertCircle size={18} color="#ef4444" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Ngày Hẹn (YYYY-MM-DD)</Text>
-            <View style={styles.inputContainer}>
-              <CalendarIcon size={18} color={THEME.colors.secondaryText} />
-              <TextInput
-                style={styles.input}
-                placeholder={dateHint}
-                value={bookingDate}
-                onChangeText={setBookingDate}
-                placeholderTextColor={THEME.colors.border}
-              />
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                Ngày Hẹn <Text style={{ color: colors.error }}>*</Text>
+              </Text>
+              <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                <CalendarIcon size={18} color={colors.secondaryText} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder={dateHint}
+                  value={formData.bookingDate}
+                  onChangeText={(val) => handleInputChange('bookingDate', val)}
+                  placeholderTextColor={colors.secondaryText + '80'}
+                />
+              </View>
+              <Text style={styles.hintText}>Định dạng: YYYY-MM-DD</Text>
             </View>
 
             <View style={styles.row}>
-              <View style={[styles.formGroup, { marginRight: 10 }]}>
-                <Text style={styles.label}>Bắt Đầu</Text>
-                <View style={styles.inputContainer}>
-                  <Clock size={16} color={THEME.colors.secondaryText} />
+              <View style={[styles.formGroup, { marginRight: 12 }]}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                    Bắt đầu <Text style={{ color: colors.error }}>*</Text>
+                </Text>
+                <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Clock size={16} color={colors.secondaryText} />
                   <TextInput
-                    style={styles.input}
-                    value={startTime}
-                    onChangeText={setStartTime}
+                    style={[styles.input, { color: colors.text }]}
+                    value={formData.startTime}
+                    onChangeText={(val) => handleInputChange('startTime', val)}
                     placeholder="09:00"
+                    placeholderTextColor={colors.secondaryText + '80'}
                   />
                 </View>
               </View>
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Kết Thúc</Text>
-                <View style={styles.inputContainer}>
-                  <Clock size={16} color={THEME.colors.secondaryText} />
+                <Text style={[styles.label, { color: colors.text }]}>
+                    Kết thúc <Text style={{ color: colors.error }}>*</Text>
+                </Text>
+                <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Clock size={16} color={colors.secondaryText} />
                   <TextInput
-                    style={styles.input}
-                    value={endTime}
-                    onChangeText={setEndTime}
+                    style={[styles.input, { color: colors.text }]}
+                    value={formData.endTime}
+                    onChangeText={(val) => handleInputChange('endTime', val)}
                     placeholder="10:00"
+                    placeholderTextColor={colors.secondaryText + '80'}
                   />
                 </View>
               </View>
             </View>
-          </View>
 
-          <View style={styles.footer}>
+            <Text style={[styles.noteText, { color: colors.secondaryText }]}>
+                * Lưu ý: Thời gian có thể được điều chỉnh sau khi hai bên thỏa thuận.
+            </Text>
+            
+            <View style={{ height: 40 }} />
+          </ScrollView>
+
+          <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <TouchableOpacity 
-              style={styles.cancelBtn} 
+              style={[styles.cancelBtn, { borderColor: colors.border }]} 
               onPress={onClose}
               disabled={isSubmitting}
             >
-              <Text style={styles.cancelText}>Hủy</Text>
+              <Text style={[styles.cancelBtnText, { color: colors.text }]}>Hủy bỏ</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.submitBtn, (!bookingDate || isSubmitting) && styles.submitBtnDisabled]} 
+              style={[styles.submitBtn, { backgroundColor: colors.text }]} 
               onPress={handleSubmit}
-              disabled={!bookingDate || isSubmitting}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={colors.background} size="small" />
               ) : (
-                <Text style={styles.submitText}>Gửi Yêu Cầu</Text>
+                <Text style={[styles.submitBtnText, { color: colors.background }]}>Gửi yêu cầu</Text>
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -168,140 +225,160 @@ export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuc
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
+  dismissArea: {
+    flex: 1,
+  },
   content: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxHeight: SCREEN_HEIGHT * 0.85,
+  },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1E293B',
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748B',
     marginTop: 2,
   },
   closeBtn: {
     padding: 4,
   },
+  scrollBody: {
+    paddingHorizontal: 20,
+  },
   advisorBrief: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
+    padding: 16,
     borderRadius: 12,
     marginBottom: 20,
   },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: THEME.colors.primary,
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: '#fff',
     fontWeight: '700',
+    fontSize: 16,
   },
   advisorInfo: {
     marginLeft: 12,
+    flex: 1,
   },
   advisorName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
   },
   advisorExpertise: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    marginTop: 1,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 16,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 20,
   },
   errorText: {
     color: '#ef4444',
     fontSize: 13,
-    marginLeft: 8,
-  },
-  form: {
-    marginBottom: 20,
+    marginLeft: 10,
+    flex: 1,
   },
   formGroup: {
+    marginBottom: 20,
     flex: 1,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 48,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 52,
   },
   input: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
     fontSize: 15,
-    color: '#1E293B',
+  },
+  hintText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    marginLeft: 4,
   },
   row: {
     flexDirection: 'row',
-    marginTop: 16,
+  },
+  noteText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   footer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+    borderTopWidth: 1,
   },
   cancelBtn: {
     flex: 1,
-    height: 48,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
-  cancelText: {
+  cancelBtnText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '700',
   },
   submitBtn: {
     flex: 2,
-    height: 48,
-    backgroundColor: THEME.colors.primary,
-    borderRadius: 8,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitText: {
-    color: '#fff',
+  submitBtnText: {
     fontSize: 15,
     fontWeight: '700',
   },

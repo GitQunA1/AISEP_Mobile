@@ -1,8 +1,36 @@
 import { SplashScreen, Stack } from "expo-router";
 import { AuthProvider } from "../src/context/AuthContext";
-import { ThemeProvider } from "../src/context/ThemeContext";
+import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
+import { ThemeProvider as NavThemeProvider, DefaultTheme, DarkTheme } from "@react-navigation/native";
+
+function RootLayoutNav() {
+  const { activeTheme, isDark } = useTheme();
+  
+  const customTheme = {
+    ...(isDark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+      background: activeTheme.colors.background,
+      card: activeTheme.colors.background,
+      text: activeTheme.colors.text,
+      border: activeTheme.colors.border,
+      primary: activeTheme.colors.primary,
+    },
+  };
+
+  return (
+    <NavThemeProvider value={customTheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="startup/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="advisor/[id]" options={{ presentation: 'card' }} />
+      </Stack>
+    </NavThemeProvider>
+  );
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -26,12 +54,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="startup/[id]" options={{ presentation: 'card' }} />
-          <Stack.Screen name="advisor/[id]" options={{ presentation: 'card' }} />
-        </Stack>
+        <RootLayoutNav />
       </AuthProvider>
     </ThemeProvider>
   );

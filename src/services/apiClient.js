@@ -1,6 +1,9 @@
 import axios from 'axios';
+import { Alert } from 'react-native';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translateMessage } from '../utils/errorMessages';
+import { eventEmitter } from '../utils/eventEmitter';
 
 // Set the production API URL as default for mobile
 const baseURL = 'https://api.aisep.tech';
@@ -11,6 +14,10 @@ export const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Singleton to avoid parallel refreshes
+let refreshPromise = null;
+let isAlertVisible = false;
 
 // Request interceptor to inject JWT token from AsyncStorage
 apiClient.interceptors.request.use(
@@ -44,20 +51,30 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized — attempt to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+      console.log('[ApiClient] 401 detected on: ' + originalRequest.url);
+      
       const refreshToken = await AsyncStorage.getItem('aisep_refresh_token');
 
       if (refreshToken) {
         try {
-          const refreshResponse = await axios.post(`${baseURL}/api/Auth/refresh-token`, {
-            refreshToken: refreshToken
-          }, {
-             headers: { 'Content-Type': 'application/json' }
-          });
+          if (!refreshPromise) {
+            console.log('[ApiClient] Attempting token refresh...');
+            refreshPromise = axios.post(`${baseURL}/api/Auth/refresh-token`, {
+              refreshToken: refreshToken
+            }, {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: 10000
+            }).finally(() => {
+              refreshPromise = null;
+            });
+          }
 
+          const refreshResponse = await refreshPromise;
           const apiResponse = refreshResponse.data;
           const tokenData = apiResponse?.data;
 
           if (apiResponse?.success && tokenData?.accessToken) {
+            console.log('[ApiClient] Refresh success. Retrying...');
             await AsyncStorage.setItem('aisep_token', tokenData.accessToken);
             await AsyncStorage.setItem('aisep_refresh_token', tokenData.refreshToken);
 
@@ -65,17 +82,45 @@ apiClient.interceptors.response.use(
             return apiClient(originalRequest);
           }
         } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
+          console.error('[ApiClient] Refresh failed', refreshError);
         }
       }
 
-      // If no refresh token or refresh failed, clear session
+      // If we reach here, either no refresh token or refresh failed
+      console.log('[ApiClient] Session expired. Clearing data...');
       await AsyncStorage.removeItem('aisep_token');
       await AsyncStorage.removeItem('aisep_refresh_token');
       await AsyncStorage.removeItem('aisep_user');
       
-      // In mobile, we'll use a listener or state to handle navigation to login
-      // we can use a custom event or a context-based logout
+      // Emit event so AuthContext can update user state internally
+      eventEmitter.emit('session_expired');
+
+      // Show native alert and redirect only if not already showing
+      if (!isAlertVisible) {
+        isAlertVisible = true;
+        Alert.alert(
+          'Phiên làm việc hết hạn',
+          'Phiên làm việc của bạn đã kết thúc. Vui lòng đăng nhập lại để tiếp tục.',
+          [
+            { 
+              text: 'Đăng nhập lại', 
+              onPress: () => {
+                isAlertVisible = false;
+                router.replace('/(auth)/login');
+              } 
+            },
+            {
+              text: 'Về trang chủ',
+              style: 'cancel',
+              onPress: () => {
+                isAlertVisible = false;
+                router.replace('/(tabs)');
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+      }
     }
 
     const normalizedError = {
