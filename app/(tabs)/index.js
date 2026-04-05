@@ -26,7 +26,7 @@ export default function DiscoveryScreen() {
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Modals state
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -55,22 +55,48 @@ export default function DiscoveryScreen() {
 
   const fetchFeed = async () => {
     try {
-      const res = await projectSubmissionService.getAllProjects();
-      if (res.statusCode === 200 && res.data && res.data.items) {
-        const publishedProjects = res.data.items
-          .filter(p => p.status === 'Approved')
-          .map(p => ({
+      const projectsRes = await projectSubmissionService.getAllProjects();
+
+      if (projectsRes.statusCode === 200 && projectsRes.data && projectsRes.data.items) {
+        const approved = projectsRes.data.items.filter(p => p.status === 'Approved');
+
+        // Collect unique startupIds and fetch each startup individually
+        const uniqueStartupIds = [...new Set(approved.map(p => p.startupId).filter(Boolean))];
+        const startupMap = {};
+        const logoMap = {};
+
+        await Promise.all(
+          uniqueStartupIds.map(async (sid) => {
+            try {
+              const s = await startupProfileService.getStartupById(sid);
+              if (s) {
+                startupMap[sid] = s.companyName || s.organizationName || null;
+                logoMap[sid] = s.logoUrl || s.logo || null;
+              }
+            } catch (e) {
+              // ignore — will fall back to embedded fields
+            }
+          })
+        );
+
+        const publishedProjects = approved.map(p => {
+          const sid = p.startupId;
+          return {
             ...p,
             id: p.projectId,
+            startupName: startupMap[sid] || p.startupName || p.organizationName || null,
             name: p.projectName,
             description: p.shortDescription || 'Chưa có mô tả chi tiết cho startup này.',
             stage: p.developmentStage || 'Giai đoạn sớm',
             industry: p.keySkills ? p.keySkills.split(',').map(s => s.trim()).filter(Boolean)[0] || 'Khác' : 'Khác',
             tags: p.keySkills ? p.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
             aiScore: p.score || 0,
-            timestamp: p.approvedAt ? new Date(p.approvedAt).toLocaleDateString('vi-VN') : 'Mới',
-            logo: null
-          }));
+            timestamp: '',
+            logo: logoMap[sid] || p.logoUrl || null,
+            imageUrl: p.projectImageUrl
+          };
+        });
+
         setAllProjects(publishedProjects);
         setFilteredProjects(publishedProjects);
       }
@@ -120,19 +146,19 @@ export default function DiscoveryScreen() {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListHeaderComponent={
-            <FeedHeader 
-               user={user} 
-               onFilterChange={handleFilterChange} 
-               onShowProjectForm={handleShowProjectForm} 
+            <FeedHeader
+              user={user}
+              onFilterChange={handleFilterChange}
+              onShowProjectForm={handleShowProjectForm}
             />
           }
           renderItem={({ item }) => (
             isLoading ? (
               <SkeletonCard />
             ) : (
-              <StartupCard 
-                startup={item} 
-                user={user} 
+              <StartupCard
+                startup={item}
+                user={user}
                 onViewProfile={(id) => router.push(`/startup/${id}`)}
               />
             )
@@ -148,32 +174,32 @@ export default function DiscoveryScreen() {
           }
         />
 
-        <ProjectSubmissionForm 
-          visible={showProjectForm} 
-          onClose={() => setShowProjectForm(false)} 
+        <ProjectSubmissionForm
+          visible={showProjectForm}
+          onClose={() => setShowProjectForm(false)}
           onSuccess={() => {
             setShowProjectForm(false);
             setShowSuccessModal(true);
             fetchFeed(); // Refresh the feed after generic creation!
-          }} 
-          user={user} 
+          }}
+          user={user}
         />
 
-        <ProfileRequiredModal 
-          visible={showProfileModal} 
+        <ProfileRequiredModal
+          visible={showProfileModal}
           onDismiss={() => setShowProfileModal(false)}
           onRedirect={() => {
             setShowProfileModal(false);
-            router.push('/profile'); 
-          }} 
+            router.push('/profile');
+          }}
         />
 
-        <SuccessModal 
-          visible={showSuccessModal} 
-          onClose={() => setShowSuccessModal(false)} 
-          title="Tạo Dự Án Thành Công!" 
-          message={<Text style={{lineHeight: 22, color: colors.secondaryText, textAlign: 'center'}}>Dự án của bạn đã được tạo thành công. Bạn có thể tải lên các tài liệu bổ sung và nộp dự án bất cứ lúc nào tại mục Quản lý dự án.</Text>} 
-          primaryBtnText="Tuyệt vời" 
+        <SuccessModal
+          visible={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+          title="Tạo Dự Án Thành Công!"
+          message={<Text style={{ lineHeight: 22, color: colors.secondaryText, textAlign: 'center' }}>Dự án của bạn đã được tạo thành công. Bạn có thể tải lên các tài liệu bổ sung và nộp dự án bất cứ lúc nào tại mục Quản lý dự án.</Text>}
+          primaryBtnText="Tuyệt vời"
         />
       </View>
     </TabScreenWrapper>
@@ -182,9 +208,9 @@ export default function DiscoveryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 10 },
-  feed: { 
+  feed: {
     paddingHorizontal: 20,
-    paddingBottom: 100, 
+    paddingBottom: 100,
   },
   separator: {
     height: 12,

@@ -121,11 +121,7 @@ export default function InvestorsScreen() {
 
   // Determine connected state logic
   const handleConnect = (investor) => {
-    if (!user || user.role !== 'startup') {
-      alert('Chỉ tài khoản Startup mới có thể gửi yêu cầu đến Nhà Đầu Tư.');
-      return;
-    }
-    alert(`Yêu cầu kết nối đã được gửi tới ${investor.name}!`);
+    router.push(`/investor/${investor.id}`);
   };
 
   // Count active filter flags for the indicator

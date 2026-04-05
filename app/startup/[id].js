@@ -1,19 +1,47 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Animated, Easing, Platform, Linking, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Animated, Easing, Platform, Dimensions, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { 
-  ArrowLeft, MapPin, Globe, Phone, Building2, CheckCircle, 
-  Users, Calendar, AlertCircle, Mail, User, Briefcase, 
-  Target, Info, ExternalLink, Eye
+  ArrowLeft, Target, ShieldCheck, Mail, MapPin, Search,
+  Calendar, Briefcase, User, Star, BadgeCheck, CheckCircle,
+  AlertCircle, DollarSign, BarChart3, Zap, Swords, TrendingUp, Users, ClipboardList
 } from 'lucide-react-native';
-import startupProfileService from '../../src/services/startupProfileService';
+
+import projectSubmissionService from '../../src/services/projectSubmissionService';
+import AIEvaluationService from '../../src/services/AIEvaluationService';
+import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const DISPLAY = (val, fallback = 'Đang cập nhật') =>
-  val && String(val).trim() ? val : fallback;
+const DISPLAY = (val, fallback = 'Đang cập nhật') => val && String(val).trim() ? val : fallback;
+const FORMAT_CURRENCY = (val) => val ? Number(val).toLocaleString('vi-VN') + ' VND' : '—';
+
+const PremiumBadge = ({ colors, inline }) => (
+  <View style={[styles.premiumBadge, { backgroundColor: colors.accentOrange + '20', borderWidth: 1, borderColor: colors.accentOrange + '40', alignSelf: inline ? 'auto' : 'flex-start', marginTop: inline ? 0 : 4 }]}>
+    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accentOrange }}>🔒 Premium</Text>
+  </View>
+);
+
+const Field = ({ label, value, colors, isCurrency, isHighlight }) => (
+  <View style={styles.fieldContainer}>
+    <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>{label}</Text>
+    <View style={{ marginTop: 4 }}>
+      {value === undefined ? (
+        <PremiumBadge colors={colors} />
+      ) : (
+        <Text style={[
+          styles.fieldValue,
+          { color: isCurrency ? colors.accentCyan : isHighlight ? colors.accentPurple : colors.text },
+          (isCurrency || isHighlight) && { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '600' }
+        ]}>
+          {value || 'Không có thông tin'}
+        </Text>
+      )}
+    </View>
+  </View>
+);
 
 export default function StartupDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -21,644 +49,280 @@ export default function StartupDetailScreen() {
   const insets = useSafeAreaInsets();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const { user } = useAuth();
 
-  const [startup, setStartup] = useState(null);
+  const [project, setProject] = useState(null);
+  const [aiHistory, setAiHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
   
-  // Tab Animation
-  const tabUnderlineAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (!isLoading && !error && startup) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isLoading, error, startup]);
+  // The web chooses the API based on isFullView. Here we can determine it from the user's role/subscription
+  // But generally, let's try the full API first or just the public API.
+  const isInvestorOrPremium = user && (user.role === 'investor' || user.role === 'Investor' || String(user.role) === '1');
 
   useEffect(() => {
-    const fetchStartup = async () => {
+    const fetchProjectDetails = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await startupProfileService.getStartupById(id);
-        if (data) {
-          setStartup(data);
+        const fetchMethod = isInvestorOrPremium 
+            ? projectSubmissionService.getProjectById(id)
+            : projectSubmissionService.getProjectNonPremiumById(id);
+            
+        const [pRes, aRes] = await Promise.all([
+            fetchMethod,
+            AIEvaluationService.getProjectAnalysisHistory(id).catch(() => null)
+        ]);
+
+        if (pRes?.success && pRes?.data) {
+          const d = pRes.data;
+          setProject({
+            ...d,
+            name: d.projectName || 'Dự án',
+            stage: d.developmentStage || 'Ý tưởng',
+            status: d.status || 'Pending',
+            tags: d.keySkills ? d.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
+          });
         } else {
-          setError('Không tìm thấy thông tin startup.');
+          setError(pRes?.message || 'Không tìm thấy thông tin dự án.');
+        }
+
+        if (aRes?.data) {
+            setAiHistory(aRes.data);
         }
       } catch (err) {
-        setError(err?.message || 'Lỗi khi tải thông tin startup.');
+        setError(err?.message || 'Lỗi khi tải dự án.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (id) fetchStartup();
-  }, [id]);
+    if (id) fetchProjectDetails();
+  }, [id, user]);
 
   useEffect(() => {
-    const targetValue = activeTab === 'overview' ? 0 : 1;
-    Animated.timing(tabUnderlineAnim, {
-      toValue: targetValue,
-      duration: 200,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: false,
-    }).start();
-  }, [activeTab]);
+    if (!isLoading && !error && project) {
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    }
+  }, [isLoading, error, project]);
 
   if (isLoading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Đang tải thông tin...</Text>
+        <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Đang tải thông tin dự án...</Text>
       </View>
     );
   }
 
-  if (error || !startup) {
+  if (error || !project) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <AlertCircle size={48} color={colors.error} />
         <Text style={[styles.errorTitle, { color: colors.error }]}>Lỗi</Text>
         <Text style={[styles.errorText, { color: colors.secondaryText }]}>{error}</Text>
-        <TouchableOpacity 
-          style={[styles.backBtnLarge, { backgroundColor: colors.primary }]} 
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={[styles.backBtnLarge, { backgroundColor: colors.primary }]} onPress={() => router.back()}>
           <Text style={styles.backBtnTextLarge}>Quay lại</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const initial = (startup.companyName || 'S').charAt(0).toUpperCase();
-  const isApproved = startup.approvalStatus === 'Approved';
+  const initial = project.name.charAt(0).toUpperCase();
+  const isApproved = ['approved', 'Approved'].includes(project.status);
+  const latestAI = aiHistory.length > 0
+    ? (aiHistory[0].potentialScore ?? aiHistory[0].startupScore ?? null)
+    : (project.startupPotentialScore ?? null);
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Đang cập nhật';
-    const d = new Date(dateStr);
-    return `Tháng ${d.getMonth() + 1} ${d.getFullYear()}`;
+  const getAvatarGradient = () => colors.primary; // fallback to primary
+
+  const renderTeamMembers = () => {
+    if (project.teamMembers === undefined) return <PremiumBadge colors={colors} />;
+    if (!project.teamMembers) return <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Đang cập nhật</Text>;
+    
+    return project.teamMembers.split(',').map((m, i, arr) => {
+        const parts = m.split('-');
+        const name = parts[0]?.trim() || 'Thành viên';
+        const role = parts.slice(1).join('-').trim() || 'Thành viên cốt lõi';
+        
+        return (
+            <View key={i} style={[styles.teamMemberRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+                <View style={[styles.teamAvatar, { backgroundColor: colors.primary }]}>
+                    <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.teamName, { color: colors.text }]}>{name}</Text>
+                    <Text style={[styles.teamRole, { color: colors.secondaryText }]}>{role}</Text>
+                </View>
+            </View>
+        );
+    });
   };
-
-  const handleOpenURL = async (url) => {
-    if (!url) return;
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
-    } catch (err) {
-      console.error("Couldn't open URL", err);
-    }
-  };
-
-  const underlineScaleX = (SCREEN_WIDTH - 40) / 2; // Approximate width of one tab
-  const translateX = tabUnderlineAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, underlineScaleX],
-  });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-      {/* HEADER */}
-      <View style={[styles.header, { 
-        paddingTop: insets.top + 8, 
-        backgroundColor: colors.background,
-        borderBottomColor: colors.border
-      }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={20} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{startup.companyName}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.secondaryText }]}>Lĩnh vực: {DISPLAY(startup.industry)}</Text>
-        </View>
-      </View>
-
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        overScrollMode="never"
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* BANNER SECTION */}
-        <View style={[styles.banner, { backgroundColor: colors.profileGradient[0] }]}>
-            {/* Pseudo-gradient effects */}
-            <View style={[styles.bannerOverlay, { backgroundColor: colors.profileGradient[1], opacity: 0.3 }]} />
-            <View style={styles.bannerPattern}>
-                <View style={[styles.stripe, { opacity: 0.1 }]} />
-                <View style={[styles.stripe, { opacity: 0.05, top: 40, left: -20 }]} />
+        <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <ArrowLeft size={20} color={colors.text} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+                <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{project.name}</Text>
+                <Text style={[styles.headerSubtitle, { color: colors.secondaryText }]}>Chi tiết dự án</Text>
             </View>
-        </View>
-
-        {/* PROFILE INFO SECTION */}
-        <View style={styles.profileContent}>
-            <View style={[styles.avatarContainer, { marginTop: -44 }]}>
-                <View style={[styles.avatar, { 
-                    borderColor: activeTheme.isDark ? colors.background : colors.white,
-                    backgroundColor: colors.primary
-                }]}>
-                    {startup.logoUrl ? (
-                        <Image source={{ uri: startup.logoUrl }} style={styles.avatarImage} />
-                    ) : (
-                        <Text style={styles.avatarInitial}>{initial}</Text>
-                    )}
+            {isApproved && (
+                <View style={[styles.approvedPill, { backgroundColor: colors.success + '20', borderColor: colors.success + '40' }]}>
+                    <Text style={{ color: colors.success, fontSize: 11, fontWeight: '700' }}>✓ Đã duyệt</Text>
                 </View>
-                {isApproved && (
-                    <View style={[styles.verifiedFloat, { backgroundColor: colors.background }]}>
-                        <CheckCircle size={18} color={colors.success} fill={colors.background} />
-                    </View>
-                )}
-            </View>
+            )}
+        </View>
 
-            <View style={styles.infoBlock}>
-                <Text style={[styles.startupName, { color: colors.text }]}>{startup.companyName}</Text>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Banner */}
+            <View style={[styles.banner, { backgroundColor: colors.mutedBackground }]} />
+
+            {/* Profile Info */}
+            <View style={styles.profileSection}>
+                <View style={[styles.avatarContainer, { borderColor: colors.background, backgroundColor: getAvatarGradient() }]}>
+                    <Text style={styles.avatarInitial}>{initial}</Text>
+                </View>
+
+                <Text style={[styles.projectName, { color: colors.text }]}>{project.name}</Text>
+                <Text style={[styles.projectDesc, { color: colors.secondaryText }]}>{project.description}</Text>
                 
-                {startup.founder && (
-                    <View style={styles.founderRow}>
-                        <User size={14} color={colors.secondaryText} />
-                        <Text style={[styles.founderText, { color: colors.secondaryText }]}>
-                            Sáng lập bởi <Text style={{ fontWeight: '700', color: colors.text }}>{startup.founder}</Text>
-                        </Text>
-                    </View>
-                )}
-
-                <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                        <MapPin size={13} color={colors.secondaryText} />
-                        <Text style={[styles.metaText, { color: colors.secondaryText }]}>{DISPLAY(startup.countryCity)}</Text>
-                    </View>
-                    <View style={[styles.dividerDot, { backgroundColor: colors.secondaryText }]} />
-                    <View style={styles.metaItem}>
-                        <Calendar size={13} color={colors.secondaryText} />
-                        <Text style={[styles.metaText, { color: colors.secondaryText }]}>Tham gia {formatDate(startup.createdAt)}</Text>
-                    </View>
+                <View style={styles.tagsContainer}>
+                    {project.tags.map((t, idx) => (
+                        <Text key={idx} style={[styles.tag, { color: colors.primary }]}>#{t}</Text>
+                    ))}
                 </View>
             </View>
 
-            {/* STATS CARD */}
-            <View style={[styles.statsCard, { 
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                ...activeTheme.shadows.sm
-            }]}>
-                <View style={styles.statBox}>
-                    <Text style={[styles.statNum, { color: colors.text }]}>{startup.followerCount ?? 0}</Text>
-                    <Text style={[styles.statLab, { color: colors.secondaryText }]}>Người theo dõi</Text>
+            {/* Metrics Grid */}
+            <View style={[styles.metricsGrid, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+                <View style={[styles.metricBox, { borderRightColor: colors.border }]}>
+                    <DollarSign size={20} color={colors.accentCyan} style={{ marginBottom: 4 }} />
+                    <Text style={[styles.metricVal, { color: colors.accentCyan }]} numberOfLines={1}>
+                        {project.revenue !== undefined ? (project.revenue ? FORMAT_CURRENCY(project.revenue) : '0 VND') : '🔒'}
+                    </Text>
+                    <Text style={[styles.metricLbl, { color: colors.secondaryText }]}>Doanh thu</Text>
                 </View>
-                <View style={[styles.vDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.statBox}>
-                    <Text style={[styles.statNum, { color: colors.text }]}>0</Text>
-                    <Text style={[styles.statLab, { color: colors.secondaryText }]}>Dự án</Text>
+                <View style={[styles.metricBox, { borderRightColor: colors.border }]}>
+                    <BarChart3 size={20} color={colors.accentGreen} style={{ marginBottom: 4 }} />
+                    <Text style={[styles.metricVal, { color: colors.accentGreen }]} numberOfLines={1}>
+                        {project.marketSize !== undefined ? (project.marketSize ? FORMAT_CURRENCY(project.marketSize) : '0 VND') : '🔒'}
+                    </Text>
+                    <Text style={[styles.metricLbl, { color: colors.secondaryText }]}>Thị trường</Text>
                 </View>
-                <View style={[styles.vDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.statBox}>
-                    <Text style={[styles.statNum, { color: colors.text }]}>0</Text>
-                    <Text style={[styles.statLab, { color: colors.secondaryText }]}>Lượt xem</Text>
+                <View style={styles.metricBox}>
+                    <Zap size={20} color={latestAI != null ? colors.accentOrange : colors.secondaryText} style={{ marginBottom: 4 }} />
+                    <Text style={[styles.metricVal, { color: latestAI != null ? colors.accentOrange : colors.secondaryText }]} numberOfLines={1}>
+                        {latestAI != null ? latestAI : 'Chưa có'}
+                    </Text>
+                    <Text style={[styles.metricLbl, { color: colors.secondaryText }]}>Điểm AI</Text>
                 </View>
             </View>
 
-            {/* TAB BAR */}
-            <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity 
-                    style={styles.tabItem} 
-                    onPress={() => setActiveTab('overview')}
-                >
-                    <Text style={[
-                        styles.tabLabel, 
-                        { color: activeTab === 'overview' ? colors.primary : colors.secondaryText }
-                    ]}>Tổng quan</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={styles.tabItem} 
-                    onPress={() => setActiveTab('contact')}
-                >
-                    <Text style={[
-                        styles.tabLabel, 
-                        { color: activeTab === 'contact' ? colors.primary : colors.secondaryText }
-                    ]}>Liên hệ</Text>
-                </TouchableOpacity>
-                <Animated.View style={[
-                    styles.tabUnderline, 
-                    { 
-                        backgroundColor: colors.primary,
-                        transform: [{ translateX }]
-                    }
-                ]} />
-            </View>
+            <View style={styles.contentSection}>
+                {/* 1. Basic Info */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, ...activeTheme.shadows.sm }]}>
+                    <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
+                        <ClipboardList size={16} color={colors.primary} />
+                        <Text style={[styles.cardTitle, { color: colors.primary }]}>THÔNG TIN CƠ BẢN</Text>
+                    </View>
+                    <View style={styles.cardBody}>
+                        <Field label="Mô tả ngắn" value={project.shortDescription} colors={colors} />
+                        <Field label="Giai đoạn phát triển" value={project.stage} colors={colors} />
+                        <Field label="Vấn đề giải quyết" value={project.problemStatement} colors={colors} />
+                        <Field label="Giải pháp đề xuất" value={project.solutionDescription} colors={colors} />
+                    </View>
+                </View>
 
-            {/* TAB CONTENT */}
-            <View style={styles.tabContent}>
-                {activeTab === 'overview' ? (
-                    <View>
-                        <View style={styles.infoGrid}>
-                            <GridItem 
-                                icon={<Briefcase size={22} color={colors.primary} />}
-                                label="Ngành nghề"
-                                value={DISPLAY(startup.industry)}
-                                colors={colors}
-                                shadows={activeTheme.shadows}
-                            />
-                            <GridItem 
-                                icon={<MapPin size={22} color={colors.primary} />}
-                                label="Khu vực"
-                                value={DISPLAY(startup.countryCity)}
-                                colors={colors}
-                                shadows={activeTheme.shadows}
-                            />
-                            <GridItem 
-                                icon={<Target size={22} color={colors.primary} />}
-                                label="Trạng thái"
-                                value={isApproved ? 'Đã xác minh' : 'Chờ duyệt'}
-                                colors={colors}
-                                shadows={activeTheme.shadows}
-                                valueColor={isApproved ? colors.success : colors.secondaryText}
-                            />
-                            <GridItem 
-                                icon={<Users size={22} color={colors.primary} />}
-                                label="Quy mô"
-                                value="Đang cập nhật"
-                                colors={colors}
-                                shadows={activeTheme.shadows}
-                            />
+                {/* 2. Team */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, ...activeTheme.shadows.sm }]}>
+                    <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
+                        <Users size={16} color={colors.accentPurple} />
+                        <Text style={[styles.cardTitle, { color: colors.accentPurple }]}>ĐỘI NGŨ</Text>
+                    </View>
+                    <View style={styles.cardBody}>
+                        <Text style={[styles.subHeading, { color: colors.secondaryText }]}>THÀNH VIÊN & VAI TRÒ</Text>
+                        <View style={{ marginBottom: 16 }}>
+                            {renderTeamMembers()}
                         </View>
-
-                        <View style={[styles.descriptionCard, { 
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            ...activeTheme.shadows.sm
-                        }]}>
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Mô tả</Text>
-                            <Text style={[styles.descriptionText, { color: startup.description ? colors.text : colors.secondaryText }]}>
-                                {startup.description || 'Chưa có mô tả chi tiết cho startup này.'}
-                            </Text>
-                        </View>
+                        
+                        <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 12 }} />
+                        <Field label="Kỹ năng cốt lõi" value={project.keySkills === undefined ? undefined : (project.keySkills || '—')} colors={colors} />
                     </View>
-                ) : (
-                    <View>
-                        <View style={[styles.contactCard, { 
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            ...activeTheme.shadows.sm
-                        }]}>
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Thông tin liên hệ</Text>
-                            {startup.contactInfo ? (
-                                startup.contactInfo.split('|').map((info, i) => {
-                                    const trimmed = info.trim();
-                                    if (!trimmed) return null;
-                                    const isEmail = trimmed.includes('@');
-                                    return (
-                                        <View key={i} style={styles.contactRow}>
-                                            <View style={[styles.iconCircle, { backgroundColor: colors.mutedBackground }]}>
-                                                {isEmail ? <Mail size={16} color={colors.secondaryText} /> : <Phone size={16} color={colors.secondaryText} />}
-                                            </View>
-                                            <Text style={[styles.contactVal, { color: colors.text }]}>{trimmed}</Text>
-                                        </View>
-                                    );
-                                })
-                            ) : (
-                                <Text style={[styles.contactVal, { color: colors.secondaryText, marginLeft: 0 }]}>Đang cập nhật</Text>
-                            )}
-                        </View>
+                </View>
 
-                        {startup.website && (
-                            <TouchableOpacity 
-                                style={[styles.contactCard, { 
-                                    backgroundColor: colors.card,
-                                    borderColor: colors.border,
-                                    ...activeTheme.shadows.sm
-                                }]}
-                                onPress={() => handleOpenURL(startup.website)}
-                            >
-                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Website</Text>
-                                <View style={styles.contactRow}>
-                                    <View style={[styles.iconCircle, { backgroundColor: colors.primaryLight }]}>
-                                        <Globe size={16} color={colors.primary} />
-                                    </View>
-                                    <Text style={[styles.contactVal, { color: colors.primary, fontWeight: '600' }]}>{startup.website}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        )}
+                {/* 3. Market & Model */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, ...activeTheme.shadows.sm }]}>
+                    <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
+                        <TrendingUp size={16} color={colors.accentGreen} />
+                        <Text style={[styles.cardTitle, { color: colors.accentGreen }]}>THỊ TRƯỜNG & MÔ HÌNH</Text>
                     </View>
-                )}
+                    <View style={styles.cardBody}>
+                        <Field label="Khách hàng mục tiêu" value={project.targetCustomers} colors={colors} />
+                        <Field label="Giá trị độc đáo (UVP)" value={project.uniqueValueProposition} colors={colors} />
+                        <Field label="Quy mô thị trường" value={project.marketSize !== undefined ? FORMAT_CURRENCY(project.marketSize) : undefined} colors={colors} isCurrency />
+                        <Field label="Doanh thu" value={project.revenue !== undefined ? FORMAT_CURRENCY(project.revenue) : undefined} colors={colors} isCurrency />
+                        <Field label="Mô hình kinh doanh" value={project.businessModel} colors={colors} />
+                    </View>
+                </View>
+
+                {/* 4. Competition */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, ...activeTheme.shadows.sm }]}>
+                    <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
+                        <Swords size={16} color={colors.error} />
+                        <Text style={[styles.cardTitle, { color: colors.error }]}>CẠNH TRANH</Text>
+                    </View>
+                    <View style={styles.cardBody}>
+                        <Field label="Đối thủ cạnh tranh" value={project.competitors} colors={colors} />
+                    </View>
+                </View>
             </View>
-        </View>
-      </ScrollView>
-      </Animated.View>
+        </ScrollView>
     </View>
   );
 }
 
-const GridItem = ({ icon, label, value, colors, shadows, valueColor }) => (
-    <View style={[styles.gridCell, { 
-        backgroundColor: colors.card,
-        borderColor: colors.border,
-        ...shadows.sm
-    }]}>
-        {icon}
-        <Text style={[styles.cellLabel, { color: colors.secondaryText }]}>{label}</Text>
-        <Text 
-            style={[styles.cellValue, { color: valueColor || colors.text }]} 
-            numberOfLines={1}
-        >
-            {value}
-        </Text>
-    </View>
-);
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -10,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginLeft: 4,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 1,
-  },
-  banner: {
-    height: 140,
-    width: '100%',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  bannerPattern: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  stripe: {
-    position: 'absolute',
-    width: '150%',
-    height: 60,
-    backgroundColor: '#fff',
-    transform: [{ rotate: '-15deg' }],
-    top: -20,
-    left: -20,
-  },
-  profileContent: {
-    paddingHorizontal: 20,
-  },
-  avatarContainer: {
-    width: 88 + 6,
-    height: 88 + 6,
-    position: 'relative',
-  },
-  avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    ...Platform.select({
-        ios: {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 5,
-        },
-        android: {
-            elevation: 6,
-        }
-    })
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarInitial: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  verifiedFloat: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoBlock: {
-    paddingTop: 12,
-    marginBottom: 16,
-  },
-  startupName: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  founderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  founderText: {
-    marginLeft: 6,
-    fontSize: 14,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metaText: {
-    marginLeft: 6,
-    fontSize: 13,
-  },
-  dividerDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    marginHorizontal: 10,
-    opacity: 0.5,
-  },
-  statsCard: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    paddingVertical: 14,
-    marginBottom: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNum: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  statLab: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  vDivider: {
-    width: 1,
-    height: '60%',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    position: 'relative',
-    marginBottom: 20,
-  },
-  tabItem: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  tabLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabUnderline: {
-    position: 'absolute',
-    bottom: -1,
-    left: 0,
-    width: '50%',
-    height: 2,
-    borderRadius: 1,
-  },
-  tabContent: {
-    // padding is handled above
-  },
-  infoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
-  },
-  gridCell: {
-    width: (SCREEN_WIDTH - 40 - 10) / 2,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    ...Platform.select({
-        ios: {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-        },
-        android: {
-            elevation: 2,
-        }
-    })
-  },
-  cellLabel: {
-    fontSize: 12,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  cellValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  descriptionCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  descriptionText: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  contactCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  contactVal: {
-    fontSize: 14,
-    flex: 1,
-  },
-  loadingText: {
-    marginTop: 12,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
-  },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  backBtnLarge: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backBtnTextLarge: {
-    color: '#fff',
-    fontWeight: '700',
-  },
+  container: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, zIndex: 10 },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
+  headerTitleContainer: { flex: 1, marginLeft: 8 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerSubtitle: { fontSize: 12 },
+  approvedPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+  banner: { height: 100, width: '100%' },
+  profileSection: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, marginTop: -40 },
+  avatarContainer: { width: 72, height: 72, borderRadius: 36, borderWidth: 4, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarInitial: { color: '#fff', fontSize: 28, fontWeight: '800' },
+  projectName: { fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  projectDesc: { fontSize: 14, lineHeight: 22, marginBottom: 12 },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { fontSize: 14, fontWeight: '600' },
+  metricsGrid: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, marginHorizontal: 20, paddingVertical: 16, marginBottom: 20 },
+  metricBox: { flex: 1, alignItems: 'center', borderRightWidth: 1, paddingHorizontal: 8 },
+  metricVal: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  metricLbl: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  contentSection: { paddingHorizontal: 20, gap: 16 },
+  card: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, gap: 8 },
+  cardTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  cardBody: { padding: 16, gap: 16 },
+  fieldContainer: { flexDirection: 'column' },
+  fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldValue: { fontSize: 14, lineHeight: 22 },
+  subHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 8 },
+  teamMemberRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
+  teamAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  teamName: { fontSize: 15, fontWeight: '700' },
+  teamRole: { fontSize: 13, marginTop: 2 },
+  loadingText: { marginTop: 12, fontSize: 14 },
+  errorTitle: { fontSize: 20, fontWeight: '700', marginTop: 16 },
+  errorText: { fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 24 },
+  backBtnLarge: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  backBtnTextLarge: { color: '#fff', fontWeight: '700' }
 });

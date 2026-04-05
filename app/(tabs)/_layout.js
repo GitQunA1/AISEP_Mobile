@@ -10,7 +10,7 @@ export default function TabsLayout() {
   const colors = activeTheme.colors;
 
   return (
-    <Tabs 
+    <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       sceneContainerStyle={{ backgroundColor: colors.background }} // Fix white flash
       screenOptions={{
@@ -26,54 +26,46 @@ export default function TabsLayout() {
         headerShadowVisible: false,
       }}
     >
-      <Tabs.Screen 
-        name="index" 
+      <Tabs.Screen
+        name="index"
         options={{
           title: "Khám phá",
           tabBarIcon: ({ color }) => <Home size={24} color={color} />,
           headerTitle: "Khám phá dự án",
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="advisors" 
+      <Tabs.Screen
+        name="advisors"
         options={{
           title: "Cố vấn",
           tabBarIcon: ({ color }) => <Users size={24} color={color} />,
           headerTitle: "Tìm cố vấn",
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="investors" 
+      <Tabs.Screen
+        name="investors"
         options={{
           title: "Nhà đầu tư",
           tabBarIcon: ({ color }) => <Target size={24} color={color} />,
           headerTitle: "Tìm nhà đầu tư",
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="chat" 
+      <Tabs.Screen
+        name="dashboard"
         options={{
-          title: "AI Chat",
-          tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
-          headerTitle: "AI Hub",
-        }} 
-      />
-      <Tabs.Screen 
-        name="dashboard" 
-        options={{
-          title: "Quản lý", 
+          title: "Quản lý",
           tabBarIcon: ({ color }) => <LayoutDashboard size={24} color={color} />,
           headerTitle: "Bảng điều khiển",
           href: user ? "/dashboard" : null,
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="profile" 
+      <Tabs.Screen
+        name="profile"
         options={{
           title: "Cá nhân",
           tabBarIcon: ({ color }) => <User size={24} color={color} />,
           headerTitle: "Hồ sơ cá nhân",
-        }} 
+        }}
       />
     </Tabs>
   );

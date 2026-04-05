@@ -77,7 +77,7 @@ export const projectSubmissionService = {
 
   getMyProjects: async () => {
     try {
-      const response = await apiClient.get('/api/Projects/my');
+      const response = await apiClient.get('/api/Projects/my?sorts=-ProjectId&pageSize=100');
       if (response && (response.success || response.isSuccess)) {
         return response;
       } else {
@@ -91,8 +91,33 @@ export const projectSubmissionService = {
     }
   },
 
+  /**
+   * Get project details by ID (Normal)
+   * @param {string|number} projectId 
+   * @returns {Promise<any>}
+   */
+  getProjectById: async (projectId) => {
+    const response = await apiClient.get(`/api/Projects/${projectId}`);
+    return response;
+  },
+
+  /**
+   * Get project details by ID (Non-Premium)
+   * @param {string|number} projectId 
+   * @returns {Promise<any>}
+   */
+  getProjectNonPremiumById: async (projectId) => {
+    const response = await apiClient.get(`/api/Projects/non-premium/${projectId}`);
+    return response;
+  },
+
+  /**
+   * Get All Projects (for the public feed)
+   * Uses GET /api/Projects/non-premium endpoint with pagination
+   * @returns {Promise<any>}
+   */
   getAllProjects: async () => {
-    const response = await apiClient.get('/api/Projects');
+    const response = await apiClient.get('/api/Projects/non-premium?pageSize=100');
     return response;
   },
 

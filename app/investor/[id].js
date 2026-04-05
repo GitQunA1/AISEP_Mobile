@@ -287,17 +287,6 @@ export default function InvestorDetailScreen() {
         </ScrollView>
       </Animated.View>
 
-      {/* PINNED BOTTOM CTA */}
-      <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-        <TouchableOpacity 
-          style={[styles.mainConnectBtn, { backgroundColor: colors.primary }]}
-          onPress={handlePitchClick}
-          activeOpacity={0.8}
-        >
-          <ShieldCheck size={20} color="#fff" style={{marginRight: 8}} />
-          <Text style={styles.mainConnectText}>Gửi yêu cầu hợp tác</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }

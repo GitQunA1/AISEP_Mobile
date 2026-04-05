@@ -12,7 +12,7 @@ const startupProfileService = {
           pageSize: 1
         }
       });
-      
+
       const items = response?.data?.items || response?.items || [];
       if (items.length > 0) {
         const match = items.find(s => s.userId == userId || s.UserId == userId);
@@ -70,7 +70,7 @@ const startupProfileService = {
           }
         }
       });
-      
+
       const response = await apiClient.post('/api/Startups', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -87,15 +87,15 @@ const startupProfileService = {
   updateStartupProfile: async (startupData) => {
     try {
       const { userId, LogoFile, BusinessLicenseFile, ...restData } = startupData;
-      
+
       const formData = new FormData();
-      
+
       Object.keys(restData).forEach(key => {
         if (restData[key] !== null && restData[key] !== undefined) {
           formData.append(key, restData[key]);
         }
       });
-      
+
       if (LogoFile && LogoFile.uri) {
         formData.append('LogoFile', {
           uri: LogoFile.uri,
@@ -110,7 +110,7 @@ const startupProfileService = {
           type: BusinessLicenseFile.type || 'application/pdf',
         });
       }
-      
+
       const response = await apiClient.put(`/api/Startups/${userId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });

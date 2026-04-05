@@ -1,385 +1,755 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
   TextInput, Alert, ActivityIndicator, Platform, 
-  ScrollView, KeyboardAvoidingView, Pressable, Dimensions 
+  ScrollView, KeyboardAvoidingView, Pressable, Dimensions, Image, FlatList
 } from 'react-native';
-import { X, Calendar as CalendarIcon, Clock, AlertCircle } from 'lucide-react-native';
+import { 
+  X, ChevronLeft, ChevronRight, Check, AlertCircle, 
+  Calendar as CalendarIcon, Clock, User, Briefcase, 
+  CreditCard, Sparkles, Loader2 
+} from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import bookingService from '../services/bookingService';
+import advisorAvailabilityService from '../services/advisorAvailabilityService';
+import advisorService from '../services/advisorService';
 import { useTheme } from '../context/ThemeContext';
+import Card from './Card';
+import FadeInView from './FadeInView';
+import Button from './Button';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function AdvisorBookingModal({ isVisible, advisor, onClose, onSuccess }) {
+const STEPS = ['Dự Án', 'Cố Vấn', 'Lịch Trình', 'Xác Nhận'];
+
+export default function AdvisorBookingModal({ 
+  isVisible, 
+  onClose, 
+  advisor = null,
+  initialAdvisorId = null, 
+  initialProjectId = null,
+  sourceBookingId = null,
+  onSuccess
+}) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
 
-  const [formData, setFormData] = useState({
-    bookingDate: '',
-    startTime: '09:00',
-    endTime: '10:00',
-  });
-  
+  // Use either the advisor object or the explicit ID
+  const targetAdvisorId = initialAdvisorId || advisor?.advisorId || advisor?.id;
+
+  // -- STATE --
+  const [step, setStep] = useState(0);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Step 0 - Project
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+
+  // Step 1 - Advisor
+  const [advisorOptions, setAdvisorOptions] = useState([]);
+  const [advisorDetails, setAdvisorDetails] = useState({});
+  const [advisorsLoading, setAdvisorsLoading] = useState(false);
+  const [selectedAdvisor, setSelectedAdvisor] = useState(null);
+
+  // Step 2 - Slots
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [selectedSlotIds, setSelectedSlotIds] = useState([]);
+  const [slotValidationError, setSlotValidationError] = useState(null);
+  const [note, setNote] = useState('');
+
+  // Step 3 - Submit
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState(null);
 
-  const initial = (advisor?.userName || 'A').charAt(0).toUpperCase();
+  // -- INITIALIZATION --
+  useEffect(() => {
+    if (isVisible) {
+      // RESET everything when opening
+      setStep(0);
+      setSelectedProject(null);
+      setSelectedAdvisor(null);
+      setSelectedSlotIds([]);
+      setNote('');
+      setIsSuccess(false);
+      setCreatedBooking(null);
+      
+      const init = async () => {
+        setIsInitializing(true);
+        try {
+          if (initialProjectId) {
+            const allProjects = await bookingService.getProjectOptions();
+            const found = allProjects.find(p => p.projectId === initialProjectId);
+            if (found) {
+              setSelectedProject(found);
+              setStep(1); // Skip to advisor selection
+            }
+          }
+          if (targetAdvisorId) {
+            const data = advisor || await advisorService.getAdvisorById(targetAdvisorId);
+            const opt = { 
+              advisorId: targetAdvisorId, 
+              advisorName: data?.userName || data?.name || '' 
+            };
+            setAdvisorDetails(prev => ({ ...prev, [targetAdvisorId]: data }));
+            setSelectedAdvisor(opt);
+            // If we're coming from a 'Connect' button, we want this advisor.
+            // When the user picks a project in Step 0, Step 1 will naturally be skipped or auto-filled.
+          }
+        } catch (e) {
+          console.error("Initialization error:", e);
+        } finally {
+          setIsInitializing(false);
+        }
+      };
+      init();
+    }
+  }, [isVisible, targetAdvisorId, initialProjectId, sourceBookingId]);
 
-  const handleInputChange = (name, value) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (error) setError('');
+  // -- DATA FETCHING --
+
+  // Load Projects (Step 0)
+  const loadProjects = async () => {
+    if (step !== 0) return;
+    setProjectsLoading(true);
+    try {
+      const data = await bookingService.getProjectOptions();
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Load projects error:", e);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 0 && isVisible && !isInitializing) loadProjects();
+  }, [step, isVisible, isInitializing]);
+
+  // Load Advisors (Step 1)
+  const loadAdvisors = async () => {
+    if (step !== 1 || !selectedProject) return;
+    setAdvisorsLoading(true);
+    try {
+      let options;
+      if (sourceBookingId) {
+        options = await bookingService.getReplacementAdvisorOptions(sourceBookingId);
+      } else {
+        options = await bookingService.getAdvisorOptions(selectedProject.projectId);
+      }
+      const list = Array.isArray(options) ? options : [];
+      setAdvisorOptions(list);
+
+      // Fetch details for each
+      const details = { ...advisorDetails };
+      await Promise.all(list.map(async opt => {
+        if (details[opt.advisorId]) return;
+        try {
+          const full = await advisorService.getAdvisorById(opt.advisorId);
+          details[opt.advisorId] = full;
+        } catch { /* ignore */ }
+      }));
+      setAdvisorDetails(details);
+    } catch (e) {
+      console.error("Load advisors error:", e);
+    } finally {
+      setAdvisorsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 1 && selectedProject) loadAdvisors();
+  }, [step, selectedProject]);
+
+  // Load Slots (Step 2)
+  const loadSlots = async () => {
+    if (step !== 2 || !selectedAdvisor) return;
+    setSlotsLoading(true);
+    try {
+      const data = await advisorAvailabilityService.getByAdvisorId(selectedAdvisor.advisorId);
+      // Filter for Available slots
+      const available = data.filter(s => s.status === 0 || s.status === 'Available');
+      setSlots(available);
+    } catch (e) {
+      console.error("Load slots error:", e);
+    } finally {
+      setSlotsLoading(true); // Wait, should be false
+      setSlotsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (step === 2 && selectedAdvisor) loadSlots();
+  }, [step, selectedAdvisor]);
+
+  // -- VALIDATION --
+  const validateSlots = useCallback((selectedIds) => {
+    if (selectedIds.length === 0) {
+      setSlotValidationError(null);
+      return false;
+    }
+
+    const selectedSlots = slots.filter(s => selectedIds.includes(s.advisorAvailabilityId)).sort((a, b) => {
+      const da = new Date(`${a.slotDate?.split('T')[0]}T${a.startTime}`);
+      const db = new Date(`${b.slotDate?.split('T')[0]}T${b.startTime}`);
+      return da - db;
+    });
+
+    // Min 12 hours ahead
+    const now = new Date();
+    const first = selectedSlots[0];
+    const firstStart = new Date(`${first.slotDate?.split('T')[0]}T${first.startTime}`);
+    const hoursAhead = (firstStart - now) / (1000 * 60 * 60);
+    if (hoursAhead < 12) {
+      setSlotValidationError('Vui lòng đặt lịch trước ít nhất 12 giờ.');
+      return false;
+    }
+
+    // Consecutive check
+    for (let i = 1; i < selectedSlots.length; i++) {
+      const prevEnd = new Date(`${selectedSlots[i - 1].slotDate?.split('T')[0]}T${selectedSlots[i - 1].endTime}`);
+      const currStart = new Date(`${selectedSlots[i].slotDate?.split('T')[0]}T${selectedSlots[i].startTime}`);
+      if (currStart.getTime() !== prevEnd.getTime()) {
+        setSlotValidationError('Các khung giờ phải liên tiếp nhau.');
+        return false;
+      }
+    }
+
+    setSlotValidationError(null);
+    return true;
+  }, [slots]);
+
+  const handleSlotToggle = (slotId) => {
+    Haptics.selectionAsync();
+    setSelectedSlotIds(prev => {
+      const next = prev.includes(slotId) ? prev.filter(id => id !== slotId) : [...prev, slotId];
+      validateSlots(next);
+      return next;
+    });
+  };
+
+  // -- ACTIONS --
+  const handleNext = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (step < 3) {
+        setStep(s => s + 1);
+    }
+  };
+
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (step > 0) setStep(s => s - 1);
   };
 
   const handleSubmit = async () => {
-    if (!formData.bookingDate) {
-      setError('Vui lòng nhập ngày hẹn');
-      return;
-    }
-    
-    // Basic date format validation (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(formData.bookingDate)) {
-      setError('Định dạng ngày không hợp lệ (YYYY-MM-DD)');
-      return;
-    }
-
-    if (formData.startTime >= formData.endTime) {
-      setError('Thời gian kết thúc phải sau thời gian bắt đầu');
-      return;
-    }
-
+    if (!validateSlots(selectedSlotIds)) return;
     setIsSubmitting(true);
-    setError('');
-
     try {
-      // Replicate web's Date logic
-      const startDateTime = new Date(`${formData.bookingDate}T${formData.startTime}:00`);
-      const endDateTime = new Date(`${formData.bookingDate}T${formData.endTime}:00`);
-      
       const payload = {
-        advisorId: advisor.advisorId,
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString()
+        AdvisorId: selectedAdvisor.advisorId,
+        ProjectId: selectedProject?.projectId,
+        AdvisorAvailabilitySlotIds: selectedSlotIds,
+        Note: note.trim() || null,
+        ...(sourceBookingId ? { SourceBookingId: sourceBookingId } : {}),
       };
-
-      await bookingService.createBooking(payload);
-      
-      if (onSuccess) {
-        onSuccess(advisor.advisorId);
-      }
-      onClose();
-      Alert.alert('Thành công', 'Yêu cầu kết nối của bạn đã được gửi!');
-    } catch (err) {
-      console.error('Booking error:', err);
-      setError('Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại.');
+      const result = await bookingService.createBooking(payload);
+      setCreatedBooking(result);
+      setIsSuccess(true);
+      if (onSuccess) onSuccess(selectedAdvisor.advisorId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể gửi yêu cầu đặt lịch. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateHint = tomorrow.toISOString().split('T')[0];
+  // -- RENDER HELPERS --
+  const canGoNext = () => {
+    if (step === 0) return !!selectedProject;
+    if (step === 1) return !!selectedAdvisor;
+    if (step === 2) return selectedSlotIds.length > 0 && !slotValidationError;
+    return false;
+  };
 
-  return (
-    <Modal
-      visible={isVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <Pressable style={styles.dismissArea} onPress={onClose} />
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={[styles.content, { backgroundColor: colors.card }]}
-        >
-          {/* DRAG HANDLE */}
-          <View style={styles.dragHandleContainer}>
-              <View style={[styles.dragHandle, { backgroundColor: activeTheme.isDark ? '#555' : '#ccc' }]} />
-          </View>
+  const formatPrice = (p) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p);
 
-          <View style={styles.header}>
-            <View>
-              <Text style={[styles.title, { color: colors.text }]}>Đặt Hẹn Cố Vấn</Text>
-              <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Gửi yêu cầu và sắp xếp lịch trình</Text>
+  const currentAdvisorDetail = selectedAdvisor ? (advisorDetails[selectedAdvisor.advisorId] || {}) : {};
+  const hourlyRate = currentAdvisorDetail.hourlyRate || 0;
+  const totalPrice = hourlyRate * selectedSlotIds.length;
+
+  // -- VIEWS --
+
+  const renderProjectStep = () => (
+    <View style={styles.stepContainer}>
+      <Text style={[styles.stepHint, { color: colors.secondaryText }]}>Chọn dự án bạn muốn nhận tư vấn</Text>
+      {projectsLoading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {projects.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Briefcase size={48} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.secondaryText }]}>Bạn chưa có dự án nào đủ điều kiện đặt lịch.</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={20}>
-              <X size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView 
-            style={styles.scrollBody} 
-            showsVerticalScrollIndicator={false} 
-            bounces={false}
-            overScrollMode="never"
-          >
-            {/* ADVISOR PREVIEW */}
-            <View style={[styles.advisorBrief, { backgroundColor: colors.mutedBackground }]}>
-              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                {advisor?.profileImage ? (
-                    <Image source={{ uri: advisor.profileImage }} style={styles.avatarImg} />
-                ) : (
-                    <Text style={styles.avatarText}>{initial}</Text>
-                )}
-              </View>
-              <View style={styles.advisorInfo}>
-                <Text style={[styles.advisorName, { color: colors.text }]}>{advisor?.userName}</Text>
-                <Text style={[styles.advisorExpertise, { color: colors.secondaryText }]}>
-                    {advisor?.expertise || 'Cố vấn chuyên gia'}
-                </Text>
-              </View>
+          ) : (
+            <View style={styles.grid}>
+              {projects.map(p => (
+                <TouchableOpacity 
+                   key={p.projectId} 
+                   style={[
+                     styles.optionCard, 
+                     { borderColor: colors.border },
+                     selectedProject?.projectId === p.projectId && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }
+                   ]}
+                   onPress={() => {
+                     Haptics.selectionAsync();
+                     setSelectedProject(p);
+                   }}
+                >
+                  <Briefcase size={20} color={selectedProject?.projectId === p.projectId ? colors.primary : colors.secondaryText} />
+                  <Text style={[styles.optionName, { color: colors.text }]} numberOfLines={2}>{p.projectName}</Text>
+                  {selectedProject?.projectId === p.projectId && <View style={styles.checkBadge}><Check size={12} color="#fff" /></View>}
+                </TouchableOpacity>
+              ))}
             </View>
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
 
-            {error ? (
-              <View style={[styles.errorBox, { backgroundColor: activeTheme.isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2' }]}>
-                <AlertCircle size={18} color="#ef4444" />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+  const renderAdvisorStep = () => (
+    <View style={styles.stepContainer}>
+      <Text style={[styles.stepHint, { color: colors.secondaryText }]}>Cố vấn được phân công cho dự án {selectedProject?.projectName}</Text>
+      {advisorsLoading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {advisorOptions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <User size={48} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.secondaryText }]}>Không tìm thấy cố vấn phù hợp cho dự án này.</Text>
+            </View>
+          ) : (
+            <View style={styles.advisorGrid}>
+              {advisorOptions.map(opt => {
+                const detail = advisorDetails[opt.advisorId] || {};
+                const isSelected = selectedAdvisor?.advisorId === opt.advisorId;
+                return (
+                  <TouchableOpacity 
+                    key={opt.advisorId}
+                    style={[
+                      styles.advisorCard,
+                      { borderColor: colors.border },
+                      isSelected && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSelectedAdvisor(opt);
+                    }}
+                  >
+                    <View style={styles.advisorHeader}>
+                       <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                          <Text style={styles.avatarText}>{(opt.advisorName || 'A').charAt(0).toUpperCase()}</Text>
+                       </View>
+                       <View style={{ flex: 1 }}>
+                          <Text style={[styles.advisorName, { color: colors.text }]}>{opt.advisorName}</Text>
+                          {detail.expertise && (
+                             <Text style={[styles.advisorExp, { color: colors.secondaryText }]} numberOfLines={1}>
+                               {detail.expertise.split(',')[0]}
+                             </Text>
+                          )}
+                       </View>
+                    </View>
+                    {detail.hourlyRate && (
+                      <Text style={[styles.rateTag, { color: colors.primary }]}>
+                        {formatPrice(detail.hourlyRate)}/giờ
+                      </Text>
+                    )}
+                    {isSelected && <View style={styles.checkBadge}><Check size={12} color="#fff" /></View>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                Ngày Hẹn <Text style={{ color: colors.error }}>*</Text>
-              </Text>
-              <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                <CalendarIcon size={18} color={colors.secondaryText} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  placeholder={dateHint}
-                  value={formData.bookingDate}
-                  onChangeText={(val) => handleInputChange('bookingDate', val)}
-                  placeholderTextColor={colors.secondaryText + '80'}
+  const renderSlotStep = () => {
+    const selectedSlots = slots
+        .filter(s => selectedSlotIds.includes(s.advisorAvailabilityId))
+        .sort((a, b) => {
+          const da = new Date(`${a.slotDate?.split('T')[0]}T${a.startTime}`);
+          const db = new Date(`${b.slotDate?.split('T')[0]}T${b.startTime}`);
+          return da - db;
+    });
+
+    return (
+      <View style={styles.stepContainer}>
+        <Text style={[styles.stepHint, { color: colors.secondaryText }]}>Chọn các khung giờ rảnh liên tiếp (tối thiểu 1h)</Text>
+        {slotValidationError && (
+          <View style={[styles.errorBox, { backgroundColor: colors.error + '15' }]}>
+             <AlertCircle size={16} color={colors.error} />
+             <Text style={[styles.errorText, { color: colors.error }]}>{slotValidationError}</Text>
+          </View>
+        )}
+        
+        {slotsLoading ? (
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+        ) : (
+          <View style={{ flex: 1 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+              {slots.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <CalendarIcon size={48} color={colors.border} />
+                  <Text style={[styles.emptyText, { color: colors.secondaryText }]}>Cố vấn chưa thiết lập lịch rảnh.</Text>
+                </View>
+              ) : (
+                <View style={styles.slotGrid}>
+                  {slots.map(s => {
+                    const isSelected = selectedSlotIds.includes(s.advisorAvailabilityId);
+                    return (
+                      <TouchableOpacity 
+                        key={s.advisorAvailabilityId}
+                        style={[
+                          styles.slotChip,
+                          { borderColor: colors.border },
+                          isSelected && { backgroundColor: colors.primary, borderColor: colors.primary }
+                        ]}
+                        onPress={() => handleSlotToggle(s.advisorAvailabilityId)}
+                      >
+                        <Text style={[styles.slotDate, { color: isSelected ? '#fff' : colors.secondaryText }]}>
+                           {new Date(s.slotDate).toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </Text>
+                        <Text style={[styles.slotTime, { color: isSelected ? '#fff' : colors.text }]}>
+                           {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+            
+            <KeyboardAvoidingView behavior="padding">
+              <View style={[styles.noteSection, { borderTopColor: colors.border }]}>
+                <Text style={[styles.noteLabel, { color: colors.text }]}>Ghi chú (tùy chọn)</Text>
+                <TextInput 
+                   style={[styles.noteInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                   placeholder="Mô tả nhu cầu tư vấn của bạn..."
+                   placeholderTextColor={colors.secondaryText + '80'}
+                   multiline
+                   numberOfLines={3}
+                   value={note}
+                   onChangeText={setNote}
                 />
               </View>
-              <Text style={styles.hintText}>Định dạng: YYYY-MM-DD</Text>
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.formGroup, { marginRight: 12 }]}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                    Bắt đầu <Text style={{ color: colors.error }}>*</Text>
-                </Text>
-                <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Clock size={16} color={colors.secondaryText} />
-                  <TextInput
-                    style={[styles.input, { color: colors.text }]}
-                    value={formData.startTime}
-                    onChangeText={(val) => handleInputChange('startTime', val)}
-                    placeholder="09:00"
-                    placeholderTextColor={colors.secondaryText + '80'}
-                  />
-                </View>
-              </View>
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                    Kết thúc <Text style={{ color: colors.error }}>*</Text>
-                </Text>
-                <View style={[styles.inputContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Clock size={16} color={colors.secondaryText} />
-                  <TextInput
-                    style={[styles.input, { color: colors.text }]}
-                    value={formData.endTime}
-                    onChangeText={(val) => handleInputChange('endTime', val)}
-                    placeholder="10:00"
-                    placeholderTextColor={colors.secondaryText + '80'}
-                  />
-                </View>
-              </View>
-            </View>
-
-            <Text style={[styles.noteText, { color: colors.secondaryText }]}>
-                * Lưu ý: Thời gian có thể được điều chỉnh sau khi hai bên thỏa thuận.
-            </Text>
-            
-            <View style={{ height: 40 }} />
-          </ScrollView>
-
-          <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <TouchableOpacity 
-              style={[styles.cancelBtn, { borderColor: colors.border }]} 
-              onPress={onClose}
-              disabled={isSubmitting}
-            >
-              <Text style={[styles.cancelBtnText, { color: colors.text }]}>Hủy bỏ</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.submitBtn, { backgroundColor: colors.text }]} 
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.background} size="small" />
-              ) : (
-                <Text style={[styles.submitBtnText, { color: colors.background }]}>Gửi yêu cầu</Text>
-              )}
-            </TouchableOpacity>
+            </KeyboardAvoidingView>
           </View>
-        </KeyboardAvoidingView>
+        )}
+      </View>
+    );
+  };
+
+  const renderConfirmStep = () => {
+    const selectedSlots = slots
+        .filter(s => selectedSlotIds.includes(s.advisorAvailabilityId))
+        .sort((a, b) => {
+          const da = new Date(`${a.slotDate?.split('T')[0]}T${a.startTime}`);
+          const db = new Date(`${b.slotDate?.split('T')[0]}T${b.startTime}`);
+          return da - db;
+    });
+
+    return (
+      <View style={styles.stepContainer}>
+        <Text style={[styles.stepHint, { color: colors.secondaryText }]}>Kiểm tra lại thông tin trước khi gửi yêu cầu</Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Card style={styles.confirmCard}>
+            <View style={styles.summaryItem}>
+              <Briefcase size={16} color={colors.primary} />
+              <View>
+                <Text style={[styles.summaryLabel, { color: colors.secondaryText }]}>Dự án</Text>
+                <Text style={[styles.summaryVal, { color: colors.text }]}>{selectedProject?.projectName}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryItem}>
+              <User size={16} color={colors.primary} />
+              <View>
+                <Text style={[styles.summaryLabel, { color: colors.secondaryText }]}>Cố vấn</Text>
+                <Text style={[styles.summaryVal, { color: colors.text }]}>{selectedAdvisor?.advisorName}</Text>
+              </View>
+            </View>
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryItem}>
+              <Clock size={16} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.summaryLabel, { color: colors.secondaryText }]}>Thời gian ({selectedSlotIds.length} giờ)</Text>
+                {selectedSlots.map(s => (
+                  <Text key={s.advisorAvailabilityId} style={[styles.summaryVal, { color: colors.text, fontSize: 13, marginTop: 2 }]}>
+                    • {new Date(s.slotDate).toLocaleDateString('vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' })} | {s.startTime.slice(0, 5)} - {s.endTime.slice(0, 5)}
+                  </Text>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryItem}>
+              <CreditCard size={16} color={colors.accentGreen} />
+              <View style={styles.priceRow}>
+                <View>
+                   <Text style={[styles.summaryLabel, { color: colors.secondaryText }]}>Chi phí ước tính</Text>
+                   <Text style={[styles.summaryMeta, { color: colors.secondaryText }]}>{formatPrice(hourlyRate)}/giờ × {selectedSlotIds.length}h</Text>
+                </View>
+                <Text style={[styles.totalPrice, { color: colors.primary }]}>{formatPrice(totalPrice)}</Text>
+              </View>
+            </View>
+          </Card>
+
+          {note ? (
+            <View style={styles.summaryNoteArea}>
+               <Text style={[styles.summaryLabel, { color: colors.secondaryText, marginBottom: 8 }]}>Ghi chú:</Text>
+               <Text style={[styles.summaryNote, { color: colors.text }]}>"{note}"</Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderSuccessScreen = () => {
+    const b = createdBooking || {};
+    const bId = b.id || b.Id || '---';
+    return (
+      <FadeInView style={styles.successContainer}>
+        <View style={[styles.successIconOuter, { backgroundColor: colors.accentGreen + '20' }]}>
+          <View style={[styles.successIconInner, { backgroundColor: colors.accentGreen }]}>
+             <Check size={40} color="#fff" />
+          </View>
+        </View>
+        <Text style={[styles.successTitle, { color: colors.text }]}>Đặt Lịch Thành Công!</Text>
+        <Text style={[styles.successDesc, { color: colors.secondaryText }]}>
+           Yêu cầu của bạn đã được gửi. Bạn có thể theo dõi trạng thái tại mục Lịch trình.
+        </Text>
+
+        <Card style={styles.successDetailCard}>
+           <View style={styles.detailRow}>
+              <Text style={{ color: colors.secondaryText }}>Mã Booking:</Text>
+              <Text style={{ color: colors.text, fontWeight: '800' }}>#{bId}</Text>
+           </View>
+           <View style={styles.detailDivider} />
+           <View style={styles.detailRow}>
+              <Text style={{ color: colors.secondaryText }}>Đối tác:</Text>
+              <Text style={{ color: colors.text, fontWeight: '800' }}>{selectedAdvisor?.advisorName}</Text>
+           </View>
+           <View style={styles.detailDivider} />
+           <View style={styles.detailRow}>
+              <Text style={{ color: colors.secondaryText }}>Tổng tiền:</Text>
+              <Text style={{ color: colors.primary, fontWeight: '900', fontSize: 16 }}>{formatPrice(totalPrice)}</Text>
+           </View>
+        </Card>
+
+        <View style={styles.successActions}>
+           <Button 
+             title="Xong" 
+             onPress={onClose} 
+             style={{ flex: 1 }}
+           />
+        </View>
+      </FadeInView>
+    );
+  };
+
+  // -- MAIN RENDER --
+  if (!isVisible) return null;
+
+  return (
+    <Modal visible={isVisible} animationType="slide" presentationStyle="fullScreen">
+      <View style={[styles.fullOverlay, { backgroundColor: colors.background }]}>
+        {isSuccess ? renderSuccessScreen() : (
+          <>
+            {/* HEADER */}
+            <View style={[styles.wizardHeader, { borderBottomColor: colors.border }]}>
+               <TouchableOpacity onPress={onClose} hitSlop={15}>
+                  <X size={24} color={colors.text} />
+               </TouchableOpacity>
+               <View style={styles.headerTitleContainer}>
+                  <Text style={[styles.headerTitle, { color: colors.text }]}>Đặt Lịch Tư Vấn</Text>
+                  <Text style={[styles.headerStep, { color: colors.primary }]}>{STEPS[step]}</Text>
+               </View>
+               <View style={{ width: 24 }} />
+            </View>
+
+            {/* PROGRESS BAR */}
+            <View style={styles.progressTrack}>
+               {STEPS.map((_, i) => (
+                 <View 
+                    key={i} 
+                    style={[
+                      styles.progressSegment, 
+                      { backgroundColor: colors.border },
+                      i <= step && { backgroundColor: colors.primary }
+                    ]} 
+                 />
+               ))}
+            </View>
+
+            {/* BODY */}
+            <View style={{ flex: 1 }}>
+               {isInitializing ? (
+                 <View style={styles.centered}>
+                    <Loader2 size={32} color={colors.primary} style={styles.spin} />
+                    <Text style={[styles.loadingText, { color: colors.secondaryText }]}>Đang khởi tạo...</Text>
+                 </View>
+               ) : (
+                 <>
+                   {step === 0 && renderProjectStep()}
+                   {step === 1 && renderAdvisorStep()}
+                   {step === 2 && renderSlotStep()}
+                   {step === 3 && renderConfirmStep()}
+                 </>
+               )}
+            </View>
+
+            {/* FOOTER */}
+            <View style={[styles.wizardFooter, { borderTopColor: colors.border }]}>
+               {step > 0 && (
+                 <TouchableOpacity style={[styles.backBtn, { borderColor: colors.border }]} onPress={handleBack}>
+                    <ChevronLeft size={20} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>Quay lại</Text>
+                 </TouchableOpacity>
+               )}
+               <View style={{ flex: 1 }} />
+               {step < 3 ? (
+                 <TouchableOpacity 
+                   style={[styles.nextBtn, { backgroundColor: canGoNext() ? colors.text : colors.border }]} 
+                   onPress={handleNext}
+                   disabled={!canGoNext()}
+                 >
+                    <Text style={{ color: colors.background, fontWeight: '800' }}>Tiếp theo</Text>
+                    <ChevronRight size={20} color={colors.background} />
+                 </TouchableOpacity>
+               ) : (
+                 <TouchableOpacity 
+                   style={[styles.submitBtn, { backgroundColor: colors.primary }]} 
+                   onPress={handleSubmit}
+                   disabled={isSubmitting}
+                 >
+                    {isSubmitting ? <ActivityIndicator size="small" color="#fff" /> : (
+                      <>
+                        <Check size={20} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: '900' }}>Gửi Yêu Cầu</Text>
+                      </>
+                    )}
+                 </TouchableOpacity>
+               )}
+            </View>
+          </>
+        )}
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+  fullOverlay: { flex: 1 },
+  wizardHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 15,
+    borderBottomWidth: 1
   },
-  dismissArea: {
-    flex: 1,
-  },
-  content: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    maxHeight: SCREEN_HEIGHT * 0.85,
-  },
-  dragHandleContainer: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  scrollBody: {
-    paddingHorizontal: 20,
-  },
-  advisorBrief: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarImg: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  advisorInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  advisorName: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  advisorExpertise: {
-    fontSize: 13,
-    marginTop: 1,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 13,
-    marginLeft: 10,
-    flex: 1,
-  },
-  formGroup: {
-    marginBottom: 20,
-    flex: 1,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  input: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 15,
-  },
-  hintText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  noteText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  headerTitleContainer: { alignItems: 'center' },
+  headerTitle: { fontSize: 16, fontWeight: '800' },
+  headerStep: { fontSize: 13, fontWeight: '700', marginTop: 2 },
+  progressTrack: { flexDirection: 'row', gap: 4, paddingHorizontal: 20, paddingTop: 10 },
+  progressSegment: { flex: 1, height: 4, borderRadius: 2 },
+  stepContainer: { flex: 1, padding: 20 },
+  stepHint: { fontSize: 14, fontWeight: '600', marginBottom: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  optionCard: { 
+    width: (SCREEN_WIDTH - 52) / 2, 
+    padding: 16, 
+    borderRadius: 20, 
+    borderWidth: 2, 
     gap: 12,
-    borderTopWidth: 1,
+    position: 'relative'
   },
-  cancelBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
+  optionName: { fontSize: 14, fontWeight: '800' },
+  checkBadge: { 
+    position: 'absolute', 
+    top: 8, 
+    right: 8, 
+    width: 20, 
+    height: 20, 
+    borderRadius: 10, 
+    backgroundColor: '#22c55e', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
   },
-  cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
+  advisorGrid: { gap: 12 },
+  advisorCard: { padding: 16, borderRadius: 24, borderWidth: 2, position: 'relative' },
+  advisorHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  advisorName: { fontSize: 16, fontWeight: '800' },
+  advisorExp: { fontSize: 12, fontWeight: '600' },
+  rateTag: { fontSize: 13, fontWeight: '800', marginTop: 8, alignSelf: 'flex-end' },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, marginBottom: 16 },
+  errorText: { fontSize: 13, fontWeight: '600', flex: 1 },
+  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  slotChip: { width: (SCREEN_WIDTH - 60) / 2, padding: 12, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', gap: 4 },
+  slotDate: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  slotTime: { fontSize: 15, fontWeight: '800' },
+  noteSection: { paddingTop: 16, marginTop: 10, borderTopWidth: 1 },
+  noteLabel: { fontSize: 14, fontWeight: '800', marginBottom: 10 },
+  noteInput: { borderWidth: 1, borderRadius: 16, padding: 12, minHeight: 80, fontSize: 14, textAlignVertical: 'top' },
+  confirmCard: { padding: 20, borderRadius: 28, gap: 16 },
+  summaryItem: { flexDirection: 'row', gap: 16 },
+  summaryLabel: { fontSize: 12, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
+  summaryVal: { fontSize: 16, fontWeight: '800' },
+  summaryDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)' },
+  priceRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  summaryMeta: { fontSize: 12, fontWeight: '600' },
+  totalPrice: { fontSize: 18, fontWeight: '900' },
+  summaryNoteArea: { marginTop: 20, paddingHorizontal: 10 },
+  summaryNote: { fontSize: 14, fontStyle: 'italic', lineHeight: 22 },
+  wizardFooter: { 
+    flexDirection: 'row', 
+    padding: 20, 
+    borderTopWidth: 1, 
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    gap: 12
   },
-  submitBtn: {
-    flex: 2,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, height: 50, borderRadius: 25, borderWidth: 1.5 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, height: 50, borderRadius: 25 },
+  submitBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, height: 50, borderRadius: 25 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
+  loadingText: { fontSize: 14, fontWeight: '700' },
+  spin: { opacity: 0.8 },
+  emptyState: { paddingVertical: 60, alignItems: 'center', gap: 16 },
+  emptyText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  successContainer: { flex: 1, padding: 30, alignItems: 'center', justifyContent: 'center' },
+  successIconOuter: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 30 },
+  successIconInner: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: 24, fontWeight: '900', marginBottom: 12 },
+  successDesc: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 30 },
+  successDetailCard: { width: '100%', padding: 20, borderRadius: 24, gap: 12, marginBottom: 40 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.05)' },
+  successActions: { width: '100%', flexDirection: 'row' }
 });
