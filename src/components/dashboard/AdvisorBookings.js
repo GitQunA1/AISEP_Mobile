@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, FlatList, TouchableOpacity, 
-  ActivityIndicator, RefreshControl, Alert, Dimensions 
+  ActivityIndicator, RefreshControl, Alert, Dimensions, ScrollView 
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { 

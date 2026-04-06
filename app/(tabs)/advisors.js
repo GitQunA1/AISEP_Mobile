@@ -5,7 +5,7 @@ import {
   ActivityIndicator, Platform 
 } from 'react-native';
 import { Search, Plus, Users, X } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import advisorService from '../../src/services/advisorService';
@@ -23,6 +23,7 @@ export default function AdvisorsScreen() {
   const router = useRouter();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
 
   const [advisors, setAdvisors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +112,16 @@ export default function AdvisorsScreen() {
   return (
     <TabScreenWrapper>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* COMPACT HEADER */}
+        <View style={styles.headerRow}>
+          <View style={styles.titleContainer}>
+            <Text style={[styles.title, { color: colors.text }]}>Tìm cố vấn</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
+              Kết nối với các chuyên gia để thúc đẩy dự án của bạn
+            </Text>
+          </View>
+        </View>
+
         {/* Unified SEARCH BAR with Home's filter/input style */}
         <View style={styles.searchSection}>
           <Animated.View style={[
@@ -153,8 +164,9 @@ export default function AdvisorsScreen() {
           )}
           keyExtractor={(item, index) => isLoading ? index.toString() : item.advisorId.toString()}
           contentContainerStyle={styles.list}
-          bounces={false}
-          overScrollMode="never"
+          bounces={true}
+          overScrollMode="auto"
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
@@ -231,7 +243,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     fontWeight: '400',
-    paddingHorizontal: 20,
     paddingBottom: 10, // Match FeedHeader's subtitle marginBottom
     marginTop: 0, // Match FeedHeader's subtitle gap
     lineHeight: 18,

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -36,13 +37,18 @@ export default function TabScreenWrapper({ children }) {
 
   return (
     <Animated.View style={[styles.container, { backgroundColor: colors.background, opacity, transform: [{ translateY }] }]}>
-      {children}
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {children}
+      </SafeAreaView>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
 });

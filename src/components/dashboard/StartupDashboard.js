@@ -31,6 +31,7 @@ import InvestmentDeals from './InvestmentDeals';
 import StartupBookings from './StartupBookings';
 import ContractSigningModal from './ContractSigningModal';
 import ProjectSubmissionForm from '../startup/ProjectSubmissionForm';
+import PaymentModal from '../PaymentModal';
 const { width } = Dimensions.get('window');
 
 const TABS = [
@@ -74,6 +75,9 @@ export default function StartupDashboard() {
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const [isLoadingDeals, setIsLoadingDeals] = useState(false);
   const [isRespondingDealId, setIsRespondingDealId] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState(null);
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
 
   // Modal States
   const [showContractModal, setShowContractModal] = useState(false);
@@ -389,6 +393,7 @@ export default function StartupDashboard() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
       {/* Scrollable Tab Switcher */}
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <ScrollView
@@ -447,10 +452,16 @@ export default function StartupDashboard() {
         </View>
 
         <View style={{ width }}>
-          <StartupBookings onAction={(action, item) => {
-            if (action === 'chat') { /* Chat logic */ }
-            if (action === 'pay') { Alert.alert('Thông báo', 'Hệ thống thanh toán đang được bảo trì.'); }
-          }} />
+          <StartupBookings 
+            refreshKey={bookingsRefreshKey}
+            onAction={(action, item) => {
+              if (action === 'chat') { /* Chat logic handled inside StartupBookings */ }
+              if (action === 'pay') {
+                setSelectedBookingForPayment(item);
+                setShowPaymentModal(true);
+              }
+            }} 
+          />
         </View>
 
         <View style={{ width }}>
@@ -521,6 +532,21 @@ export default function StartupDashboard() {
           fetchInvestmentDeals();
         }}
       />
+
+      {showPaymentModal && selectedBookingForPayment && (
+        <PaymentModal
+          isVisible={showPaymentModal}
+          bookingId={selectedBookingForPayment.id || selectedBookingForPayment.bookingId}
+          price={selectedBookingForPayment.price || selectedBookingForPayment.estimatedPrice}
+          advisorName={selectedBookingForPayment.advisorName}
+          slotCount={selectedBookingForPayment.slotCount || 1}
+          onClose={() => setShowPaymentModal(false)}
+          onPaid={() => {
+            setShowPaymentModal(false);
+            setBookingsRefreshKey(prev => prev + 1);
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -222,6 +222,7 @@ export default function InvestorDashboard() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <ScrollView 
           ref={tabsScrollRef}

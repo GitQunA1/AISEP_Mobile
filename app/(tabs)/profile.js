@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { 
   Calendar, 
@@ -33,6 +33,7 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { activeTheme, isDark } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
 
   const [stats, setStats] = useState({
     connections: 0,
@@ -101,7 +102,6 @@ export default function ProfileScreen() {
     return (
       <TabScreenWrapper>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-          <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
           <View style={styles.guestContainer}>
             <View style={[styles.guestIconContainer, { backgroundColor: colors.secondaryBackground }]}>
               <UserIcon size={64} color={colors.secondaryText} />
@@ -152,7 +152,6 @@ export default function ProfileScreen() {
   return (
     <TabScreenWrapper>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle="light-content" />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
           {/* Header Section */}
           <View style={[styles.headerSection, { backgroundColor: colors.card }]}>
@@ -270,7 +269,7 @@ const styles = StyleSheet.create({
   registerLink: { marginTop: 20 },
   registerText: { fontSize: 15, fontWeight: '600' },
 
-  headerSection: { paddingTop: 40, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' },
+  headerSection: { paddingTop: 10, paddingBottom: 24, paddingHorizontal: 20, alignItems: 'center' },
   headerBackground: { ...StyleSheet.absoluteFillObject },
   headerCircle: { position: 'absolute', width: 250, height: 250, borderRadius: 125 },
   profileHeaderContent: { alignItems: 'center', zIndex: 1 },

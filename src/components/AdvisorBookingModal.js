@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import Card from './Card';
 import FadeInView from './FadeInView';
 import Button from './Button';
+import PaymentModal from './PaymentModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -63,6 +64,7 @@ export default function AdvisorBookingModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [createdBooking, setCreatedBooking] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // -- INITIALIZATION --
   useEffect(() => {
@@ -79,14 +81,20 @@ export default function AdvisorBookingModal({
       const init = async () => {
         setIsInitializing(true);
         try {
+          let preSelectedProject = null;
+          let preSelectedAdvisor = null;
+
+          // 1. Handle Pre-selected Project if initialProjectId is provided
           if (initialProjectId) {
             const allProjects = await bookingService.getProjectOptions();
             const found = allProjects.find(p => p.projectId === initialProjectId);
             if (found) {
+              preSelectedProject = found;
               setSelectedProject(found);
-              setStep(1); // Skip to advisor selection
             }
           }
+
+          // 2. Handle Pre-selected Advisor if targetAdvisorId (from Connect button) is provided
           if (targetAdvisorId) {
             const data = advisor || await advisorService.getAdvisorById(targetAdvisorId);
             const opt = { 
@@ -94,10 +102,22 @@ export default function AdvisorBookingModal({
               advisorName: data?.userName || data?.name || '' 
             };
             setAdvisorDetails(prev => ({ ...prev, [targetAdvisorId]: data }));
+            preSelectedAdvisor = opt;
             setSelectedAdvisor(opt);
-            // If we're coming from a 'Connect' button, we want this advisor.
-            // When the user picks a project in Step 0, Step 1 will naturally be skipped or auto-filled.
           }
+
+          // 3. Logic to auto-skip steps if INITIAL data is provided
+          // - If we have BOTH project and advisor, jump to SLOTS (Step 2)
+          // - If we ONLY have project, jump to ADVISOR selection (Step 1)
+          // - If we ONLY have advisor, stay on project selection (Step 0) but it will be filtered
+          if (preSelectedProject && preSelectedAdvisor) {
+            setStep(2); 
+          } else if (preSelectedProject) {
+            setStep(1);
+          } else {
+            setStep(0);
+          }
+
         } catch (e) {
           console.error("Initialization error:", e);
         } finally {
@@ -115,8 +135,38 @@ export default function AdvisorBookingModal({
     if (step !== 0) return;
     setProjectsLoading(true);
     try {
-      const data = await bookingService.getProjectOptions();
-      setProjects(Array.isArray(data) ? data : []);
+      const rawData = await bookingService.getProjectOptions();
+      const projectList = Array.isArray(rawData) ? rawData : [];
+
+      if (projectList.length === 0) {
+        setProjects([]);
+        return;
+      }
+
+      // -- MATCH WEB LOGIC: Filter projects that have advisors --
+      const assignedProjectIds = [];
+      await Promise.allSettled(
+        projectList.map(async (p) => {
+          try {
+            const options = await bookingService.getAdvisorOptions(p.projectId);
+            const list = Array.isArray(options) ? options : [];
+            
+            if (list.length > 0) {
+              // If an initialAdvisorId was passed, ONLY show projects for THAT advisor
+              if (targetAdvisorId) {
+                if (list.some(o => o.advisorId === targetAdvisorId)) {
+                  assignedProjectIds.push(p.projectId);
+                }
+              } else {
+                assignedProjectIds.push(p.projectId);
+              }
+            }
+          } catch { /* ignore */ }
+        })
+      );
+
+      const filtered = projectList.filter(p => assignedProjectIds.includes(p.projectId));
+      setProjects(filtered);
     } catch (e) {
       console.error("Load projects error:", e);
     } finally {
@@ -126,7 +176,7 @@ export default function AdvisorBookingModal({
 
   useEffect(() => {
     if (step === 0 && isVisible && !isInitializing) loadProjects();
-  }, [step, isVisible, isInitializing]);
+  }, [step, isVisible, isInitializing, targetAdvisorId]);
 
   // Load Advisors (Step 1)
   const loadAdvisors = async () => {
@@ -233,6 +283,14 @@ export default function AdvisorBookingModal({
   // -- ACTIONS --
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    // If we have a target advisor (Connect flow), and we pick a project, 
+    // we already have the advisor selected, so we jump straight to SLOTS (Step 2)
+    if (step === 0 && targetAdvisorId && selectedAdvisor) {
+      setStep(2);
+      return;
+    }
+
     if (step < 3) {
         setStep(s => s + 1);
     }
@@ -561,15 +619,36 @@ export default function AdvisorBookingModal({
         </Card>
 
         <View style={styles.successActions}>
-           <Button 
-             title="Xong" 
-             onPress={onClose} 
-             style={{ flex: 1 }}
-           />
+           {needsPayment ? (
+             <>
+               <Button 
+                 title="Thanh Toán Ngay" 
+                 onPress={() => setShowPaymentModal(true)} 
+                 style={{ flex: 1.5 }}
+               />
+               <Button 
+                 title="Để sau" 
+                 variant="outline"
+                 onPress={onClose} 
+                 style={{ flex: 1 }}
+               />
+             </>
+           ) : (
+             <Button 
+               title="Xong" 
+               onPress={onClose} 
+               style={{ flex: 1 }}
+             />
+           )}
         </View>
       </FadeInView>
     );
   };
+
+  // -- LOGIC HELPER --
+  const needsPayment = 
+     createdBooking?.status === 'ApprovedAwaitingPayment' || 
+     createdBooking?.status === 1;
 
   // -- MAIN RENDER --
   if (!isVisible) return null;
@@ -656,6 +735,21 @@ export default function AdvisorBookingModal({
                )}
             </View>
           </>
+        )}
+        
+        {showPaymentModal && (
+          <PaymentModal
+            isVisible={showPaymentModal}
+            bookingId={createdBooking?.id || createdBooking?.Id}
+            price={totalPrice}
+            advisorName={selectedAdvisor?.advisorName}
+            slotCount={selectedSlotIds.length}
+            onClose={() => setShowPaymentModal(false)}
+            onPaid={() => {
+              setShowPaymentModal(false);
+              onClose();
+            }}
+          />
         )}
       </View>
     </Modal>

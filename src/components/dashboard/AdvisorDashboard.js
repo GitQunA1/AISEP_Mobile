@@ -23,6 +23,9 @@ import signalRService from '../../services/signalRService';
 import AdvisorAvailability from './AdvisorAvailability';
 import AdvisorBookings from './AdvisorBookings';
 import ConsultingReportModal from '../booking/ConsultingReportModal';
+import BookingDetailModal from '../booking/BookingDetailModal';
+import BookingChatModal from '../booking/BookingChatModal';
+import chatService from '../../services/chatService';
 
 const { width } = Dimensions.get('window');
 
@@ -50,7 +53,11 @@ export default function AdvisorDashboard() {
   
   // UI States
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [activeChatSession, setActiveChatSession] = useState(null);
+  const [chatLoadingId, setChatLoadingId] = useState(null);
 
   const pagerRef = useRef(null);
   const tabsScrollRef = useRef(null);
@@ -90,6 +97,26 @@ export default function AdvisorDashboard() {
   const onRefresh = () => {
     setIsRefreshing(true);
     fetchData();
+  };
+  
+  const handleShowDetail = (booking) => {
+    setSelectedBooking(booking);
+    setShowDetailModal(true);
+  };
+  
+  const handleChat = async (booking) => {
+    setChatLoadingId(booking.id || booking.bookingId);
+    try {
+      const result = await chatService.createOrGetBookingChat(booking.id || booking.bookingId);
+      setSelectedBooking(booking);
+      setActiveChatSession(result);
+      setShowChatModal(true);
+    } catch (error) {
+      console.error('[AdvisorDashboard] Chat access failed:', error);
+      Alert.alert('Lỗi', 'Không thể khởi tạo phòng chat.');
+    } finally {
+      setChatLoadingId(null);
+    }
   };
 
   const handleTabChange = (tabId) => {
@@ -204,6 +231,7 @@ export default function AdvisorDashboard() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <ScrollView 
           ref={tabsScrollRef}
@@ -246,7 +274,7 @@ export default function AdvisorDashboard() {
         <View style={{ width }}>
           <AdvisorBookings 
             activeTab="pending"
-            onShowDetail={(b) => Alert.alert('Chi tiết', `Booking #${b.id}`)}
+            onShowDetail={handleShowDetail}
             onRefresh={fetchData}
           />
         </View>
@@ -254,9 +282,9 @@ export default function AdvisorDashboard() {
         <View style={{ width }}>
           <AdvisorBookings 
             activeTab="confirmed"
-            onChat={(b) => Alert.alert('Chat', 'Mở phiên chat với startup')}
+            onChat={handleChat}
             onShowReport={(b) => { setSelectedBooking(b); setShowReportModal(true); }}
-            onShowDetail={(b) => Alert.alert('Chi tiết', `Booking #${b.id}`)}
+            onShowDetail={handleShowDetail}
             onRefresh={fetchData}
           />
         </View>
@@ -269,21 +297,45 @@ export default function AdvisorDashboard() {
           <AdvisorBookings 
             activeTab="completed"
             onShowReport={(b) => { setSelectedBooking(b); setShowReportModal(true); }}
-            onShowDetail={(b) => Alert.alert('Chi tiết', `Booking #${b.id}`)}
+            onShowDetail={handleShowDetail}
             onRefresh={fetchData}
           />
         </View>
       </ScrollView>
 
-      <ConsultingReportModal 
-        visible={showReportModal}
-        booking={selectedBooking}
-        onClose={() => setShowReportModal(false)}
-        onShowSuccess={(msg) => {
-          Alert.alert('Thành công', msg);
-          fetchData();
-        }}
-      />
+      {showReportModal && (
+        <ConsultingReportModal 
+          isVisible={showReportModal}
+          bookingId={selectedBooking?.id || selectedBooking?.bookingId}
+          userRole="Advisor"
+          onClose={() => {
+            setShowReportModal(false);
+            setSelectedBooking(null);
+          }}
+          onShowSuccess={(msg) => {
+            Alert.alert('Thành công', msg);
+            fetchData();
+          }}
+        />
+      )}
+
+      {showDetailModal && (
+        <BookingDetailModal
+          isVisible={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          booking={selectedBooking}
+          userRole="Advisor"
+        />
+      )}
+
+      {showChatModal && (
+        <BookingChatModal
+          isVisible={showChatModal}
+          onClose={() => setShowChatModal(false)}
+          booking={selectedBooking}
+          session={activeChatSession}
+        />
+      )}
     </View>
   );
 }

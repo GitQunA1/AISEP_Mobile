@@ -14,6 +14,7 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       sceneContainerStyle={{ backgroundColor: colors.background }} // Fix white flash
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: colors.background,
         },
@@ -29,6 +30,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          headerShown: false,
           title: "Khám phá",
           tabBarIcon: ({ color }) => <Home size={24} color={color} />,
           headerTitle: "Khám phá dự án",

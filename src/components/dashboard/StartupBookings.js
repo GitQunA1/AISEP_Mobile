@@ -43,7 +43,7 @@ const FILTER_TABS = [
   { id: 'Cancel', label: 'Đã hủy' }
 ];
 
-export default function StartupBookings({ user, onAction }) {
+export default function StartupBookings({ user, onAction, refreshKey }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -83,7 +83,7 @@ export default function StartupBookings({ user, onAction }) {
 
   useEffect(() => {
     loadBookings();
-  }, [loadBookings]);
+  }, [loadBookings, refreshKey]);
 
   const handleChat = async (booking) => {
     setChatLoadingId(booking.id || booking.bookingId);

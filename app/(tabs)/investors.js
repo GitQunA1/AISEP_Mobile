@@ -5,7 +5,7 @@ import {
   Platform 
 } from 'react-native';
 import { Search, Filter, TrendingUp, X } from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import investorService from '../../src/services/investorService';
@@ -22,6 +22,7 @@ export default function InvestorsScreen() {
   const router = useRouter();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
 
   const [investors, setInvestors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,7 +139,16 @@ export default function InvestorsScreen() {
   return (
     <TabScreenWrapper>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        
+        {/* COMPACT HEADER */}
+        <View style={styles.headerRow}>
+          <View style={styles.titleContainer}>
+            <Text style={[styles.title, { color: colors.text }]}>Tìm nhà đầu tư</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
+              Khám phá và kết nối với mạng lưới nhà đầu tư toàn cầu
+            </Text>
+          </View>
+        </View>
+
         {/* SEARCH AND FILTER SECTION */}
         <View style={styles.searchSection}>
           <Animated.View style={[
@@ -193,8 +203,9 @@ export default function InvestorsScreen() {
           )}
           keyExtractor={(item, index) => isLoading ? index.toString() : item.id.toString()}
           contentContainerStyle={styles.list}
-          bounces={false}
-          overScrollMode="never"
+          bounces={true}
+          overScrollMode="auto"
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
@@ -253,7 +264,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     fontWeight: '400',
-    paddingHorizontal: 20,
     paddingBottom: 10,
     marginTop: 0,
     lineHeight: 18,

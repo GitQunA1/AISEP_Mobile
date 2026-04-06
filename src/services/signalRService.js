@@ -80,6 +80,7 @@ class SignalRService {
         accessTokenFactory: () => this.accessToken
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .withHubProtocol(new signalR.JsonHubProtocol())
       .build();
 
     this.notificationConnection.on('notification_received', (notification) => {
@@ -108,6 +109,7 @@ class SignalRService {
         accessTokenFactory: () => this.accessToken
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .withHubProtocol(new signalR.JsonHubProtocol())
       .build();
 
     this.chatConnection.on('chat_message_received', (message) => {
@@ -164,8 +166,9 @@ class SignalRService {
     const isConnected = await this.waitForChatConnection();
     if (isConnected) {
       try {
-        await this.chatConnection.invoke('JoinSession', sessionId);
-        console.log('[SignalRService] Joined session:', sessionId);
+        const numericId = Number(sessionId);
+        await this.chatConnection.invoke('JoinSession', numericId);
+        console.log('[SignalRService] Joined session:', numericId);
       } catch (error) {
         console.error('[SignalRService] JoinSession error:', error);
       }
@@ -175,8 +178,9 @@ class SignalRService {
   async leaveChatSession(sessionId) {
     if (this.chatConnection?.state === signalR.HubConnectionState.Connected) {
       try {
-        await this.chatConnection.invoke('LeaveSession', sessionId);
-        console.log('[SignalRService] Left session:', sessionId);
+        const numericId = Number(sessionId);
+        await this.chatConnection.invoke('LeaveSession', numericId);
+        console.log('[SignalRService] Left session:', numericId);
       } catch (error) {
         console.error('[SignalRService] LeaveSession error:', error);
       }

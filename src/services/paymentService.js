@@ -1,0 +1,54 @@
+import apiClient from './apiClient';
+
+/**
+ * Payment Service (Mobile)
+ * Handles booking payment flows via SePay QR.
+ */
+const paymentService = {
+  /**
+   * Initialize checkout for a booking → returns QR code URL, target amount, and payment code.
+   * POST /api/payments/bookings/{bookingId}/checkout
+   * @param {number} bookingId
+   */
+  checkoutBooking: async (bookingId) => {
+    try {
+      const response = await apiClient.post(`/api/payments/bookings/${bookingId}/checkout`);
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error initializing checkout:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch payment status for a specific booking (used for polling).
+   * GET /api/payments/bookings/{bookingId}/status
+   * @param {number} bookingId
+   */
+  getBookingPaymentStatus: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/api/payments/bookings/${bookingId}/status`);
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error fetching payment status:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch status for a specific transaction ID.
+   * GET /api/payments/{transactionId}/status
+   * @param {number} transactionId
+   */
+  getTransactionStatus: async (transactionId) => {
+    try {
+      const response = await apiClient.get(`/api/payments/${transactionId}/status`);
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error fetching transaction status:', error);
+      throw error;
+    }
+  }
+};
+
+export default paymentService;

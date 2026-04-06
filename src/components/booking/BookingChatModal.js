@@ -22,6 +22,11 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
   const [isSending, setIsSending] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
 
+  // Role-based names
+  const isUserAdvisor = user?.role === 'Advisor' || user?.role === 2;
+  const chatPartnerName = isUserAdvisor ? booking?.customerName : booking?.advisorName;
+  const chatPartnerAvatar = (chatPartnerName || 'C').charAt(0);
+
   const flatListRef = useRef(null);
   const sessionId = session?.chatSessionId || session?.id || booking?.chatSessionId;
 
@@ -47,10 +52,10 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
       // Transform messages to match internal logic (Twitter-style mapping)
       const transformed = items.map(msg => ({
         ...msg,
-        id: msg.chatMessageId || msg.id,
-        text: msg.content,
-        isMine: String(msg.senderId) === String(user?.userId),
-        timestamp: msg.sentAt || msg.createdAt || new Date().toISOString()
+        id: msg.chatMessageId || msg.id || msg.chat_message_id,
+        text: msg.content || msg.Content || msg.content_text,
+        isMine: String(msg.senderId || msg.SenderId || msg.sender_id) === String(user?.userId),
+        timestamp: msg.sentAt || msg.createdAt || msg.sent_at || new Date().toISOString()
       })).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
       setMessages(transformed);
@@ -69,24 +74,31 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
       setConnectionStatus('Connected');
 
       signalRService.onChatMessageReceived((msg) => {
-        if (String(msg.chatSessionId) === String(sessionId)) {
-          const isMine = String(msg.senderId) === String(user?.userId);
+        // Handle all possible property naming conventions (camel, Pascal, snake)
+        const msgSessionId = msg.chatSessionId || msg.ChatSessionId || msg.chat_session_id;
+        const msgSenderId = msg.senderId || msg.SenderId || msg.sender_id;
+        const msgContent = msg.content || msg.Content || msg.content_text || '';
+        
+        if (String(msgSessionId) === String(sessionId)) {
+          console.log('[ChatModal] SignalR Message Received:', msgContent.substring(0, 20));
+          const isMine = String(msgSenderId) === String(user?.userId);
           
           setMessages(prev => {
-            const exists = prev.some(m => m.id === (msg.chatMessageId || msg.id));
+            const msgId = msg.chatMessageId || msg.id || msg.chat_message_id;
+            const exists = prev.some(m => m.id === msgId);
             if (exists) return prev;
 
             // Remove optimistic message if same content was just sent by me recently
             const filtered = isMine 
-              ? prev.filter(m => !(m.isOptimistic && m.text.trim() === msg.content.trim()))
+              ? prev.filter(m => !(m.isOptimistic && m.text.trim() === msgContent.trim()))
               : prev;
               
             const transformedMsg = {
               ...msg,
-              id: msg.chatMessageId || msg.id,
-              text: msg.content,
+              id: msgId,
+              text: msgContent,
               isMine,
-              timestamp: msg.sentAt || msg.createdAt || new Date().toISOString()
+              timestamp: msg.sentAt || msg.createdAt || msg.SentAt || msg.sent_at || new Date().toISOString()
             };
 
             return [...filtered, transformedMsg].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -150,7 +162,7 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
       ]}>
         {!isMine && isLastInSequence && (
           <View style={[styles.avatarBox, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>{(booking?.advisorName || 'C').charAt(0)}</Text>
+            <Text style={styles.avatarText}>{chatPartnerAvatar}</Text>
           </View>
         )}
         {!isMine && !isLastInSequence && <View style={styles.avatarPlaceholder} />}
@@ -187,7 +199,7 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-              {booking?.advisorName || 'Cố vấn tư vấn'}
+              {chatPartnerName || 'Hội thoại'}
             </Text>
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, { backgroundColor: connectionStatus === 'Connected' ? '#10b981' : '#ef4444' }]} />
@@ -215,9 +227,9 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
             ListHeaderComponent={() => (
               <View style={styles.welcomeContainer}>
                 <View style={[styles.largeAvatar, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.largeAvatarText}>{(booking?.advisorName || 'C').charAt(0)}</Text>
+                  <Text style={styles.largeAvatarText}>{chatPartnerAvatar}</Text>
                 </View>
-                <Text style={[styles.welcomeTitle, { color: colors.text }]}>{booking?.advisorName}</Text>
+                <Text style={[styles.welcomeTitle, { color: colors.text }]}>{chatPartnerName}</Text>
                 <Text style={[styles.welcomeSubtitle, { color: colors.secondaryText }]}>Bắt đầu cuộc hội thoại tư vấn dự án</Text>
               </View>
             )}

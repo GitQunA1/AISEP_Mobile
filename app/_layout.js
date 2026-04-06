@@ -4,6 +4,8 @@ import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import { ThemeProvider as NavThemeProvider, DefaultTheme, DarkTheme } from "@react-navigation/native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 function RootLayoutNav() {
   const { activeTheme, isDark } = useTheme();
@@ -22,6 +24,7 @@ function RootLayoutNav() {
 
   return (
     <NavThemeProvider value={customTheme}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -52,10 +55,12 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
