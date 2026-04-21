@@ -6,7 +6,8 @@
 
 class BlockchainService {
   /**
-   * Simulate hash generation for a string/content
+   * Helper: Simple hash function (simulated)
+   * In production, this would use a native crypto module or crypto-js
    */
   static _simpleHash(data) {
     let hash = 0;
@@ -35,6 +36,8 @@ class BlockchainService {
 
   /**
    * Simulate IP protection on blockchain
+   * @param {string[]} filenames
+   * @param {string} projectId
    */
   static async protectDocumentsOnBlockchain(filenames, projectId) {
     if (!filenames || filenames.length === 0) {
@@ -64,6 +67,27 @@ class BlockchainService {
     }
   }
 
+  /**
+   * BR-24: Verify document hash against blockchain record
+   * @param {string} filename 
+   * @param {string} storedHash 
+   */
+  static async verifyDocumentHash(filename, storedHash) {
+    // Simulate verification
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const currentHash = this._simpleHash(filename); 
+    const verified = currentHash === storedHash;
+
+    return {
+      verified,
+      message: verified ? 'Tài liệu đã được xác thực trên Blockchain' : 'Dữ liệu không khớp',
+      status: verified ? 'VERIFIED' : 'MISMATCH'
+    };
+  }
+
+  /**
+   * BR-21: Get blockchain proof for display
+   */
   static getBlockchainProof(project) {
     if (!project.blockchainHash || !project.transactionHash) {
       return { available: false, message: 'Chưa có bằng chứng blockchain' };
@@ -76,6 +100,29 @@ class BlockchainService {
       verificationStatus: 'Verified',
       shortHash: project.transactionHash.substring(0, 16) + '...'
     };
+  }
+
+  /**
+   * BR-25: Get verification badge info
+   */
+  static getVerificationBadge(verified) {
+    if (verified) {
+      return {
+        label: 'Verified on Blockchain',
+        color: '#17bf63', // Web --score-good
+        icon: 'CheckCircle'
+      };
+    } else {
+      return {
+        label: 'Document mismatch',
+        color: '#e74c3c', // Web --score-poor
+        icon: 'AlertCircle'
+      };
+    }
+  }
+
+  static hasIPProtection(project) {
+    return !!(project.blockchainHash && project.transactionHash);
   }
 }
 

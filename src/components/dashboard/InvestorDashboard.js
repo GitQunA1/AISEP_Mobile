@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, 
   Animated, RefreshControl, ActivityIndicator, Dimensions, Alert
 } from 'react-native';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { 
   TrendingUp, Users, Shield, Briefcase, Heart, 
   DollarSign, CheckCircle, MessageSquare, ChevronRight, PieChart, Star
@@ -64,6 +65,16 @@ export default function InvestorDashboard() {
 
   const pagerRef = useRef(null);
   const tabsScrollRef = useRef(null);
+  const mainScrollRef = useRef(null);
+  useScrollToTop(mainScrollRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, [])
+  );
 
   const fetchData = async () => {
     if (!user?.userId) return;
@@ -257,7 +268,10 @@ export default function InvestorDashboard() {
         scrollEventThrottle={16}
       >
         <View style={{ width }}>
-          <ScrollView refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+          <ScrollView 
+            ref={mainScrollRef}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
             {renderOverview()}
           </ScrollView>
         </View>

@@ -60,6 +60,10 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       <View style={styles.tabItemsRaw}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
+          
+          // Skip rendering if href is null (used for auth guards in _layout.js)
+          if (options.href === null) return null;
+
           const label = options.title !== undefined ? options.title : route.name;
           const isFocused = state.index === index;
 

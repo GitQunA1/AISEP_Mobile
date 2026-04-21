@@ -122,7 +122,7 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
       const res = await projectSubmissionService.uploadDocument(project.id || project.projectId, fileToUpload, docType);
       
       if (res && (res.success || res.isSuccess)) {
-        Alert.alert('Thành công', 'Tài liệu đã được tải lên và bảo vệ trên blockchain.');
+        Alert.alert('Thành công', 'Tài liệu của bạn đã được tải lên thành công. Hệ thống AISEP sẽ thực hiện xác minh Blockchain tài liệu của bạn khi dự án được duyệt bởi Nhân viên vận hành.');
         loadDocuments();
       } else {
         Alert.alert('Lỗi', res?.message || 'Không thể tải tài liệu lên.');

@@ -7,6 +7,7 @@ import {
 import { Search, Plus, Users, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 
 import advisorService from '../../src/services/advisorService';
 import bookingService from '../../src/services/bookingService';
@@ -24,6 +25,16 @@ export default function AdvisorsScreen() {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const insets = useSafeAreaInsets();
+  const listRef = useRef(null);
+  useScrollToTop(listRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (listRef.current) {
+        listRef.current.scrollToOffset({ offset: 0, animated: false });
+      }
+    }, [])
+  );
 
   const [advisors, setAdvisors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -151,12 +162,14 @@ export default function AdvisorsScreen() {
         </View>
 
         <FlatList
+          ref={listRef}
           data={isLoading ? [1, 2, 3] : filteredAdvisors}
           renderItem={({ item }) => isLoading ? (
             <AdvisorSkeletonCard />
           ) : (
             <AdvisorCard 
               advisor={item} 
+              user={user}
               bookingStatus={getBookingStatus(item.advisorId)}
               onViewProfile={(id) => router.push(`/advisor/${id}`)}
               onConnect={handleConnect}

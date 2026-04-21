@@ -1,4 +1,6 @@
 import { SplashScreen, Stack } from "expo-router";
+
+SplashScreen.preventAutoHideAsync();
 import { AuthProvider } from "../src/context/AuthContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
 import { useFonts } from "expo-font";

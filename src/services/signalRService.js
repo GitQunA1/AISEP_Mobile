@@ -147,7 +147,19 @@ class SignalRService {
   /**
    * Callbacks Registration
    */
-  onChatStateChanged(callback) { this.chatStateChanged = callback; }
+  onChatStateChanged(callback) { 
+    this.chatStateChanged = callback; 
+    if (this.chatConnection) {
+      const stateMap = {
+        [signalR.HubConnectionState.Connected]: 'Connected',
+        [signalR.HubConnectionState.Connecting]: 'Reconnecting',
+        [signalR.HubConnectionState.Reconnecting]: 'Reconnecting',
+        [signalR.HubConnectionState.Disconnected]: 'Disconnected',
+        [signalR.HubConnectionState.Disconnecting]: 'Disconnected'
+      };
+      callback(stateMap[this.chatConnection.state] || 'Disconnected');
+    }
+  }
   onNotificationReceived(callback) { this.notificationReceived = callback; }
   onChatMessageReceived(callback) { this.chatMessageReceived = callback; }
   onChatSessionClosed(callback) { this.chatSessionClosed = callback; }
@@ -166,9 +178,8 @@ class SignalRService {
     const isConnected = await this.waitForChatConnection();
     if (isConnected) {
       try {
-        const numericId = Number(sessionId);
-        await this.chatConnection.invoke('JoinSession', numericId);
-        console.log('[SignalRService] Joined session:', numericId);
+        await this.chatConnection.invoke('JoinSession', sessionId);
+        console.log('[SignalRService] Joined session:', sessionId);
       } catch (error) {
         console.error('[SignalRService] JoinSession error:', error);
       }
@@ -178,9 +189,8 @@ class SignalRService {
   async leaveChatSession(sessionId) {
     if (this.chatConnection?.state === signalR.HubConnectionState.Connected) {
       try {
-        const numericId = Number(sessionId);
-        await this.chatConnection.invoke('LeaveSession', numericId);
-        console.log('[SignalRService] Left session:', numericId);
+        await this.chatConnection.invoke('LeaveSession', sessionId);
+        console.log('[SignalRService] Left session:', sessionId);
       } catch (error) {
         console.error('[SignalRService] LeaveSession error:', error);
       }

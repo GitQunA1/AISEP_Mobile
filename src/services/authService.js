@@ -10,11 +10,12 @@ export const authService = {
    */
   register: async (data) => {
     const payload = {
-      name: data.fullName || data.name || '',
+      fullName: data.fullName || '',
+      name: data.username || data.name || (data.fullName ? data.fullName.replace(/\s+/g, '').toLowerCase() : ''), 
       email: data.email,
       password: data.password,
       confirmPassword: data.confirmPassword,
-      role: data.role ?? 0,
+      role: 0, // Strictly Startup role for Mobile
     };
 
     const response = await apiClient.post('/api/Auth/register', payload);
@@ -26,6 +27,14 @@ export const authService = {
    */
   login: async (credentials) => {
     const response = await apiClient.post('/api/Auth/login', credentials);
+    return response;
+  },
+
+  /**
+   * Trigger a password reset email
+   */
+  forgotPassword: async (email) => {
+    const response = await apiClient.post('/api/Auth/forgot-password', { email });
     return response;
   },
 

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Rocket, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import authService from '../../src/services/authService';
+import { useTheme } from '../../src/context/ThemeContext';
 import THEME from '../../src/constants/Theme';
 import Button from '../../src/components/Button';
 import Input from '../../src/components/Input';
@@ -19,15 +20,25 @@ const decodeBase64 = (base64) => {
   }
   return str;
 };
-
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
+  const { activeTheme } = useTheme();
+  const colors = activeTheme.colors;
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -67,6 +78,18 @@ export default function LoginScreen() {
           email: claimEmail || rawUser?.email || email,
           role: claimRole || rawUser?.role || 'startup',
         };
+
+        // NEW: Strictly enforce Startup only role for Mobile App
+        const roleStr = typeof user.role === 'string' ? user.role.toLowerCase() : (user.role === 0 ? 'startup' : '');
+        if (roleStr !== 'startup') {
+          setIsLoading(false);
+          Alert.alert(
+            'Truy cập bị từ chối',
+            `Vai trò hệ thống của bạn: (${user.role}) không được quyền truy cập ứng dụng AISEP Mobile, hãy sử dụng trình duyệt để truy cập AISEP tại www.aisep.tech để sử dụng toàn bộ tính năng`,
+            [{ text: 'Đã hiểu' }]
+          );
+          return;
+        }
         
         await login(user, accessToken, refreshToken);
         router.replace('/(tabs)');
@@ -81,21 +104,21 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={THEME.colors.text} />
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.logoContainer}>
-            <Rocket size={24} color={THEME.colors.primary} />
-            <Text style={styles.logoText}>AISEP</Text>
+            <Rocket size={24} color={colors.primary} />
+            <Text style={[styles.logoText, { color: colors.text }]}>AISEP</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.title}>Đăng nhập vào AISEP</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Đăng nhập vào AISEP</Text>
           
           <Input
             label="Địa chỉ email"
@@ -118,14 +141,17 @@ export default function LoginScreen() {
               style={styles.eyeIcon} 
               onPress={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOff size={20} color={THEME.colors.secondaryText} /> : <Eye size={20} color={THEME.colors.secondaryText} />}
+              {showPassword ? <EyeOff size={20} color={colors.secondaryText} /> : <Eye size={20} color={colors.secondaryText} />}
             </TouchableOpacity>
           </View>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
 
-          <TouchableOpacity style={styles.forgotContainer}>
-            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+          <TouchableOpacity 
+            style={styles.forgotContainer}
+            onPress={() => router.push('/(auth)/forgot-password')}
+          >
+            <Text style={[styles.forgotText, { color: colors.primary }]}>Quên mật khẩu?</Text>
           </TouchableOpacity>
 
           <Button 
@@ -136,15 +162,15 @@ export default function LoginScreen() {
           />
 
           <View style={styles.dividerContainer}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>hoặc</Text>
-            <View style={styles.dividerLine} />
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.secondaryText }]}>hoặc</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
           </View>
 
           <View style={styles.signupPrompt}>
-            <Text style={styles.signupText}>Chưa có tài khoản? </Text>
+            <Text style={[styles.signupText, { color: colors.secondaryText }]}>Chưa có tài khoản? </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={styles.signupLink}>Đăng ký ngay</Text>
+              <Text style={[styles.signupLink, { color: colors.primary }]}>Đăng ký ngay</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -156,7 +182,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -178,7 +203,6 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 20,
     fontWeight: '800',
-    color: THEME.colors.text,
     marginLeft: THEME.spacing.xs,
   },
   content: {
@@ -188,7 +212,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: THEME.colors.text,
     marginBottom: THEME.spacing.xl,
   },
   passwordContainer: {
@@ -201,7 +224,6 @@ const styles = StyleSheet.create({
     bottom: 15,
   },
   errorText: {
-    color: THEME.colors.error,
     marginBottom: THEME.spacing.md,
   },
   forgotContainer: {
@@ -209,7 +231,6 @@ const styles = StyleSheet.create({
     marginBottom: THEME.spacing.lg,
   },
   forgotText: {
-    color: THEME.colors.primary,
     fontWeight: '600',
   },
   loginButton: {
@@ -223,21 +244,17 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: THEME.colors.border,
   },
   dividerText: {
     marginHorizontal: THEME.spacing.md,
-    color: THEME.colors.secondaryText,
   },
   signupPrompt: {
     flexDirection: 'row',
     justifyContent: 'center',
   },
   signupText: {
-    color: THEME.colors.secondaryText,
   },
   signupLink: {
-    color: THEME.colors.primary,
     fontWeight: '700',
   },
 });

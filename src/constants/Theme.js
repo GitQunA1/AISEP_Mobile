@@ -1,50 +1,46 @@
 export const COLORS = {
   light: {
     background: '#ffffff',
-    secondaryBackground: '#f8fafc',
+    secondaryBackground: '#f7f9fa',
     card: '#ffffff',
     hover: '#eff3f4',
     text: '#0f1419',
-    secondaryText: '#64748b',
+    secondaryText: '#536471',
     primary: '#1d9bf0',
     primaryLight: 'rgba(29, 155, 240, 0.1)',
-    border: '#e2e8f0',
-    error: '#ef4444',
-    success: '#10b981',
+    border: '#cfd9de',
+    error: '#e74c3c',
+    success: '#17bf63',
     successLight: '#ecfdf5',
-    warning: '#f59e0b',
-    mutedBackground: '#f1f5f9',
+    warning: '#ffad1f',
+    mutedBackground: '#f7f9fa',
     white: '#ffffff',
     shadow: '#000000',
-    // Form specific
-    inputBackground: '#f8fafc',
-    inputBorder: 'rgba(0,0,0,0.12)',
-    inputBorderFocus: '#1d9bf0',
-    destructive: '#ef4444',
     // Status colors
-    statusApprovedBg: 'rgba(16, 185, 129, 0.15)',
-    statusApprovedText: '#059669',
-    statusDraftBg: 'rgba(100, 116, 139, 0.15)',
-    statusDraftText: '#475569',
-    statusPendingBg: 'rgba(245, 158, 11, 0.15)',
-    statusPendingText: '#d97706',
-    statusRejectedBg: 'rgba(239, 68, 68, 0.15)',
-    statusRejectedText: '#dc2626',
-    // Profile specific
-    profileGradient: ['#1a6fd4', '#0ea5e9'],
-    divider: '#e2e8f0',
+    statusApprovedBg: 'rgba(23, 191, 99, 0.15)',
+    statusApprovedText: '#17bf63',
+    statusDraftBg: 'rgba(83, 100, 113, 0.15)',
+    statusDraftText: '#536471',
+    statusPendingBg: 'rgba(255, 173, 31, 0.15)',
+    statusPendingText: '#ffad1f',
+    statusRejectedBg: 'rgba(231, 76, 60, 0.15)',
+    statusRejectedText: '#e74c3c',
     // Accent colors for categories
-    accentCyan: '#0ea5e9',
-    accentPurple: '#8b5cf6',
-    accentOrange: '#f59e0b',
-    accentGreen: '#10b981',
+    accentCyan: '#1d9bf0',
+    accentPurple: '#7c3aed',
+    accentOrange: '#ffad1f',
+    accentGreen: '#17bf63',
+    // Input colors
+    inputBackground: '#f7f9fa',
+    inputBorder: '#cfd9de',
+    inputBorderFocus: '#1d9bf0',
   },
   dark: {
     background: '#000000',
-    secondaryBackground: '#15181c',
+    secondaryBackground: '#16181c',
     card: '#000000',
     hover: '#181818',
-    text: '#eff3f4',
+    text: '#e7e9ea',
     secondaryText: '#71767b',
     primary: '#1d9bf0',
     primaryLight: 'rgba(29, 155, 240, 0.15)',
@@ -56,11 +52,6 @@ export const COLORS = {
     mutedBackground: '#16181c',
     white: '#ffffff',
     shadow: '#ffffff',
-    // Form specific
-    inputBackground: '#000000',
-    inputBorder: '#333639',
-    inputBorderFocus: '#1d9bf0',
-    destructive: '#f4212e',
     // Status colors
     statusApprovedBg: 'rgba(0, 186, 124, 0.15)',
     statusApprovedText: '#00ba7c',
@@ -70,14 +61,15 @@ export const COLORS = {
     statusPendingText: '#ffd400',
     statusRejectedBg: 'rgba(244, 33, 46, 0.15)',
     statusRejectedText: '#f4212e',
-    // Profile specific
-    profileGradient: ['#000000', '#1d9bf0'],
-    divider: '#2f3336',
     // Accent colors for categories
-    accentCyan: '#0ea5e9',
+    accentCyan: '#1d9bf0',
     accentPurple: '#a78bfa',
     accentOrange: '#fbbf24',
     accentGreen: '#34d399',
+    // Input colors
+    inputBackground: '#1a1a1a',
+    inputBorder: '#333639',
+    inputBorderFocus: '#1d9bf0',
   },
 };
 
@@ -93,7 +85,7 @@ export const SPACING = {
 export const RADIUS = {
   sm: 6,
   md: 8,
-  lg: 16,
+  lg: 24, // High-fidelity roundness for mobile cards
   full: 9999,
 };
 
@@ -122,8 +114,8 @@ export const SHADOWS = {
 };
 
 export const THEME = {
-  colors: COLORS.dark,
-  isDark: true,
+  colors: COLORS.light,
+  isDark: false,
   spacing: SPACING,
   radius: RADIUS,
   shadows: SHADOWS,

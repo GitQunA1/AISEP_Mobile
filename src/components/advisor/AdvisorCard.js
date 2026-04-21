@@ -3,13 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, ActivityIndi
 import { MapPin, Star, DollarSign, CheckCircle, Clock } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 
-export default function AdvisorCard({ advisor, onViewProfile, onConnect, bookingStatus }) {
+export default function AdvisorCard({ advisor, onViewProfile, onConnect, bookingStatus, user }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   
-  const expertises = advisor.expertise 
-    ? advisor.expertise.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const expertises = Array.isArray(advisor.expertise)
+    ? advisor.expertise
+    : (typeof advisor.expertise === 'string' 
+        ? advisor.expertise.split(',').map(s => s.trim()).filter(Boolean) 
+        : []);
   
   const initial = (advisor.userName || 'A').charAt(0).toUpperCase();
 
@@ -176,25 +178,27 @@ export default function AdvisorCard({ advisor, onViewProfile, onConnect, booking
       </View>
 
       {/* ACTIONS */}
-      <View style={styles.actions}>
-        <Animated.View style={[
-          styles.actionBtn, 
-          styles.outlinedBtn, 
-          { borderColor: colors.border, transform: [{ scale: viewProfileScale }] }
-        ]}>
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPressIn={() => handlePressIn(viewProfileScale)}
-            onPressOut={() => handlePressOut(viewProfileScale)}
-            onPress={() => onViewProfile?.(advisor.advisorId)}
-            style={styles.innerBtn}
-          >
-            <Text style={[styles.btnText, { color: colors.text, fontWeight: '600' }]}>Xem hồ sơ</Text>
-          </TouchableOpacity>
-        </Animated.View>
+      {user ? (
+        <View style={styles.actions}>
+          <Animated.View style={[
+            styles.actionBtn, 
+            styles.outlinedBtn, 
+            { borderColor: colors.border, transform: [{ scale: viewProfileScale }] }
+          ]}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(viewProfileScale)}
+              onPressOut={() => handlePressOut(viewProfileScale)}
+              onPress={() => onViewProfile?.(advisor.advisorId)}
+              style={styles.innerBtn}
+            >
+              <Text style={[styles.btnText, { color: colors.text, fontWeight: '600' }]}>Xem hồ sơ</Text>
+            </TouchableOpacity>
+          </Animated.View>
 
-        {renderStatusButton()}
-      </View>
+          {renderStatusButton()}
+        </View>
+      ) : null}
     </View>
   );
 }

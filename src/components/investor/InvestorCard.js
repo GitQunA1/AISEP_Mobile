@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react
 import { MapPin, Target, TrendingUp, CheckCircle, User } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 
-export default function InvestorCard({ investor, onViewProfile, onConnect }) {
+export default function InvestorCard({ investor, onViewProfile, onConnect, user }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   
@@ -129,40 +129,26 @@ export default function InvestorCard({ investor, onViewProfile, onConnect }) {
       </View>
 
       {/* ACTIONS */}
-      <View style={styles.actions}>
-        <Animated.View style={[
-          styles.actionBtn, 
-          styles.outlinedBtn, 
-          { borderColor: colors.border, transform: [{ scale: viewProfileScale }] }
-        ]}>
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPressIn={() => handlePressIn(viewProfileScale)}
-            onPressOut={() => handlePressOut(viewProfileScale)}
-            onPress={() => onViewProfile?.(investor.id)}
-            style={styles.innerBtn}
-          >
-            <User size={16} color={colors.text} style={{ marginRight: 6 }} />
-            <Text style={[styles.btnText, { color: colors.text, fontWeight: '600' }]}>Hồ sơ</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View style={[
-          styles.actionBtn, 
-          { backgroundColor: colors.primary, flex: 2, transform: [{ scale: connectScale }] }
-        ]}>
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPressIn={() => handlePressIn(connectScale)}
-            onPressOut={() => handlePressOut(connectScale)}
-            onPress={() => onConnect?.(investor)}
-            style={styles.innerBtn}
-          >
-            <TrendingUp size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={[styles.btnText, { color: '#fff' }]}>Kết nối</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      {user ? (
+        <View style={styles.actions}>
+          <Animated.View style={[
+            styles.actionBtn, 
+            styles.outlinedBtn, 
+            { borderColor: colors.border, transform: [{ scale: viewProfileScale }] }
+          ]}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(viewProfileScale)}
+              onPressOut={() => handlePressOut(viewProfileScale)}
+              onPress={() => onViewProfile?.(investor.id)}
+              style={styles.innerBtn}
+            >
+              <User size={16} color={colors.text} style={{ marginRight: 6 }} />
+              <Text style={[styles.btnText, { color: colors.text, fontWeight: '600' }]}>Hồ sơ</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      ) : null}
     </View>
   );
 }

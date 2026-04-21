@@ -12,10 +12,19 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     loadThemePreference();
-  }, []);
+    
+    // Explicit listener for system theme changes
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      if (themeMode === 'system') {
+        updateActiveTheme(themeMode, colorScheme);
+      }
+    });
+    
+    return () => subscription.remove();
+  }, [themeMode]);
 
   useEffect(() => {
-    updateActiveTheme();
+    updateActiveTheme(themeMode, systemColorScheme);
   }, [themeMode, systemColorScheme]);
 
   const loadThemePreference = async () => {
@@ -29,10 +38,10 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
-  const updateActiveTheme = () => {
-    const isDark = themeMode === 'system' 
-      ? systemColorScheme === 'dark' 
-      : themeMode === 'dark';
+  const updateActiveTheme = (mode = themeMode, systemScheme = systemColorScheme) => {
+    const isDark = mode === 'system' 
+      ? systemScheme === 'dark' 
+      : mode === 'dark';
     
     const colors = isDark ? COLORS.dark : COLORS.light;
     

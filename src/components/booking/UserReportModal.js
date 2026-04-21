@@ -200,7 +200,9 @@ export default function UserReportModal({
                     style={[styles.addEvidenceBtn, { borderColor: colors.border, borderStyle: 'dashed' }]}
                     onPress={handlePickEvidence}
                   >
-                    <Plus size={24} color={colors.secondaryText} />
+                    <View style={styles.addIconWrapper}>
+                      <Plus size={24} color={colors.secondaryText} />
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>
@@ -264,6 +266,7 @@ const styles = StyleSheet.create({
   evidenceImg: { width: '100%', height: '100%' },
   removeBtn: { position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.6)', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   addEvidenceBtn: { width: (width - 70) / 3, aspectRatio: 1, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.02)' },
+  addIconWrapper: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   inputWrapper: { height: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1, fontSize: 15 },
   footer: { padding: 20, paddingBottom: 34, borderTopWidth: 1 },

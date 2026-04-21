@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TextInput, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
 import THEME from '../constants/Theme';
 
 const Input = ({ 
@@ -14,24 +15,31 @@ const Input = ({
   style,
   inputStyle
 }) => {
+  const { activeTheme } = useTheme();
+  const colors = activeTheme.colors;
+
   return (
     <View style={[styles.container, style]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: colors.text }]}>{label}</Text>}
       <TextInput
         style={[
           styles.input,
-          error && styles.inputError,
+          { 
+            backgroundColor: colors.inputBackground || colors.secondaryBackground || colors.background, 
+            color: colors.text, 
+            borderColor: error ? colors.error : colors.border 
+          },
           inputStyle
         ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={THEME.colors.secondaryText}
+        placeholderTextColor={colors.secondaryText}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
       />
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>}
     </View>
   );
 };
@@ -44,24 +52,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: THEME.colors.text,
     marginBottom: THEME.spacing.xs,
   },
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
     borderRadius: THEME.radius.md,
     paddingHorizontal: THEME.spacing.md,
     fontSize: 16,
-    color: THEME.colors.text,
-    backgroundColor: THEME.colors.background,
-  },
-  inputError: {
-    borderColor: THEME.colors.error,
   },
   errorText: {
-    color: THEME.colors.error,
     fontSize: 12,
     marginTop: THEME.spacing.xs,
   },

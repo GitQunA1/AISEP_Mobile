@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { 
   Calendar, 
   MapPin, 
@@ -34,6 +35,16 @@ export default function ProfileScreen() {
   const { activeTheme, isDark } = useTheme();
   const colors = activeTheme.colors;
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef(null);
+  useScrollToTop(scrollRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, [])
+  );
 
   const [stats, setStats] = useState({
     connections: 0,
@@ -152,7 +163,11 @@ export default function ProfileScreen() {
   return (
     <TabScreenWrapper>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView 
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20), flexGrow: 1 }}
+        >
           {/* Header Section */}
           <View style={[styles.headerSection, { backgroundColor: colors.card }]}>
             <View style={styles.headerBackground}>
@@ -200,15 +215,6 @@ export default function ProfileScreen() {
                 </Text>
                 <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Dự án</Text>
               </View>
-
-              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-
-              <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.text }]}>
-                  {isLoadingStats ? <ActivityIndicator size="small" color={colors.primary} /> : (stats.rating || 0).toFixed(1)}
-                </Text>
-                <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Đánh giá</Text>
-              </View>
             </Card>
           </View>
 
@@ -225,20 +231,11 @@ export default function ProfileScreen() {
                 false
               )}
             </Card>
+          </View>
 
-            <Text style={[styles.sectionHeading, { color: colors.secondaryText }]}>CÁ NHÂN</Text>
-            <Card style={styles.menuCard}>
-              {renderMenuItem(<UserIcon size={20} color={colors.primary} />, "Thông tin hồ sơ", "Cập nhật ảnh và thông tin cơ bản", () => {}, colors.text, true)}
-              {renderMenuItem(<Shield size={20} color="#10b981" />, "Bảo mật tài khoản", "Mật khẩu và xác thực 2 lớp", () => {}, colors.text, true)}
-              {renderMenuItem(<Bell size={20} color="#f59e0b" />, "Thông báo", "Quản lý cảnh báo tức thời", () => {}, colors.text, false)}
-            </Card>
+          <View style={{ flex: 1 }} />
 
-            <Text style={[styles.sectionHeading, { color: colors.secondaryText }]}>HỖ TRỢ</Text>
-            <Card style={styles.menuCard}>
-              {renderMenuItem(<HelpCircle size={20} color="#8b5cf6" />, "Trung tâm trợ giúp", "Câu hỏi thường gặp và HDSD", () => {}, colors.text, true)}
-              {renderMenuItem(<Share2 size={20} color="#ec4899" />, "Chia sẻ ứng dụng", "Giới thiệu AISEP cho cộng đồng", () => {}, colors.text, false)}
-            </Card>
-
+          <View style={styles.footerContent}>
             <Card style={[styles.logoutCard, { backgroundColor: colors.error + '08', borderColor: colors.error + '20' }]}>
               <TouchableOpacity 
                 style={styles.logoutBtn} 
@@ -250,7 +247,7 @@ export default function ProfileScreen() {
             </Card>
 
             <View style={styles.versionInfo}>
-              <Text style={[styles.versionText, { color: colors.secondaryText }]}>AISEP for Mobile • Phiên bản 1.2.0</Text>
+              <Text style={[styles.versionText, { color: colors.secondaryText }]}>AISEP for Mobile • Phiên bản 1.3.0</Text>
             </View>
           </View>
         </ScrollView>
@@ -286,7 +283,7 @@ const styles = StyleSheet.create({
   roleLabel: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   roleText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   
-  statsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, marginTop: 28, borderRadius: 28, width: '100%', borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.02)' },
+  statsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, marginTop: 28, borderRadius: 28, width: '100%', backgroundColor: 'rgba(255,255,255,0.02)' },
   statBox: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 20, fontWeight: '900', marginBottom: 2 },
   statLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
@@ -294,17 +291,18 @@ const styles = StyleSheet.create({
 
   mainContent: { paddingHorizontal: 20, paddingTop: 10 },
   sectionHeading: { fontSize: 11, fontWeight: '800', marginLeft: 16, marginBottom: 12, marginTop: 24, letterSpacing: 1.5, opacity: 0.8 },
-  menuCard: { padding: 0, borderRadius: 28, overflow: 'hidden', borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.01)' },
+  menuCard: { padding: 0, borderRadius: 28, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.01)' },
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18 },
   menuIconContainer: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   menuContent: { flex: 1 },
   menuTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   menuSubtitle: { fontSize: 13, marginTop: 3, opacity: 0.6 },
 
-  logoutCard: { marginTop: 32, borderRadius: 24, padding: 0, overflow: 'hidden', borderWidth: 1 },
+  logoutCard: { marginTop: 32, borderRadius: 24, padding: 0, overflow: 'hidden' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 60, gap: 12 },
   logoutText: { fontWeight: '800', fontSize: 16, letterSpacing: -0.3 },
   
   versionInfo: { alignItems: 'center', marginTop: 32, marginBottom: 20 },
-  versionText: { fontSize: 12, fontWeight: '600', opacity: 0.4 }
+  versionText: { fontSize: 12, fontWeight: '600', opacity: 0.4 },
+  footerContent: { paddingHorizontal: 20, paddingBottom: 10 }
 });

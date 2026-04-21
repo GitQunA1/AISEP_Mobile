@@ -23,8 +23,11 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import api from '../../src/services/apiClient';
 import StartupCard from '../../src/components/feed/StartupCard';
+import projectSubmissionService from '../../src/services/projectSubmissionService';
+import startupProfileService from '../../src/services/startupProfileService';
+import SkeletonCard from '../../src/components/feed/SkeletonCard';
 import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
-import { Clock, List, Star, Filter, Check, X, Sparkles, SlidersHorizontal } from 'lucide-react-native';
+import { Clock, List, Star, Filter, Check, X, Sparkles, SlidersHorizontal, Plus } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 const PAGE_SIZE = 10;
@@ -74,11 +77,7 @@ export default function DiscoveryScreen() {
   const clampedScroll = Animated.diffClamp(scrollYClamped, 0, ACTUAL_HEADER_HEIGHT);
 
   // Interpolate the clamped scroll to move the header
-  const headerTranslateY = clampedScroll.interpolate({
-    inputRange: [0, ACTUAL_HEADER_HEIGHT],
-    outputRange: [0, -ACTUAL_HEADER_HEIGHT],
-    extrapolate: 'clamp',
-  });
+  const headerTranslateY = 0; // KEEP FIXED AS REQUESTED
 
   // State
   const [projects, setProjects]           = useState([]);
@@ -93,54 +92,80 @@ export default function DiscoveryScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const fetchProjects = async (params) => {
-    const sortOption = SORT_OPTIONS.find(o => o.key === params.sort);
-    
-    let sorts = sortOption?.sieve || '-CreatedAt';
-    let filters = '';
+    try {
+      const sortOption = SORT_OPTIONS.find(o => o.key === params.sort);
+      let sorts = sortOption?.sieve || '-CreatedAt';
+      let filters = 'Status==Approved';
 
-    if (params.stage && params.stage.length > 0) {
-      const stageFilters = params.stage.map(s => `DevelopmentStage==${s}`).join('||');
-      filters += (filters ? ',' : '') + `(${stageFilters})`;
+      if (params.stage && params.stage.length > 0) {
+        const stageFilters = params.stage.map(s => `DevelopmentStage==${s}`).join('||');
+        filters += (filters ? ',' : '') + `(${stageFilters})`;
+      }
+      if (params.industry && params.industry.length > 0) {
+        const industryFilters = params.industry.map(i => `Industry==${i}`).join('||');
+        filters += (filters ? ',' : '') + `(${industryFilters})`;
+      }
+
+      const queryParams = new URLSearchParams({
+        page: params.page.toString(),
+        pageSize: params.limit.toString(),
+        sorts: sorts,
+      });
+      if (filters) queryParams.append('filters', filters);
+
+      // Fetch both projects and startups to join data (Parity with Web)
+      // This ensures we get the real organization name and logo
+      const [projectsRes, startupsRes] = await Promise.all([
+        api.get(`/api/Projects/non-premium?${queryParams.toString()}`),
+        startupProfileService.getAllStartups({ pageSize: 150 })
+      ]);
+
+      const startupMap = {};
+      const profiles = (startupsRes?.data?.items || startupsRes?.items || []);
+      profiles.forEach(p => {
+        const info = {
+          name: p.organizationName || p.companyName || p.startupName,
+          logo: p.logoUrl || p.logo
+        };
+        const sid = p.startupId || p.id || p.userId;
+        if (sid) startupMap[sid] = info;
+      });
+
+      const data = projectsRes.data || projectsRes;
+      const items = data.items || [];
+      
+      const mappedItems = items.map(p => {
+        const sid = p.startupId || p.userId;
+        const info = startupMap[sid];
+
+        return {
+          ...p,
+          id: p.projectId,
+          startupName: info?.name || p.startupCompanyName || p.startupName || p.organizationName || p.companyName || 'Startup',
+          logo: info?.logo || p.startupLogoUrl || p.logoUrl,
+          name: p.projectName,
+          description: p.shortDescription || 'Chưa có mô tả.',
+          stage: p.developmentStage != null ? (typeof p.developmentStage === 'number' ? STAGE_OPTIONS[p.developmentStage] : p.developmentStage) : 'Idea',
+          industry: p.industry != null ? (typeof p.industry === 'number' ? INDUSTRY_OPTIONS[p.industry] : p.industry) : 'Khác',
+          aiScore: p.startupPotentialScore ?? null,
+          imageUrl: p.projectImageUrl,
+          interestedCount: p.followerCount || 0,
+          createdAt: p.createdAt,
+          targetCustomers: p.targetCustomers,
+          uniqueValueProposition: p.uniqueValueProposition,
+          businessModel: p.businessModel,
+        };
+      });
+
+      return {
+        data: mappedItems,
+        total: data.totalCount ?? (items.length === PAGE_SIZE ? (params.page * PAGE_SIZE) + 1 : items.length),
+        hasMore: items.length === PAGE_SIZE,
+      };
+    } catch (error) {
+      console.error('fetchProjects error:', error);
+      throw error;
     }
-    if (params.industry && params.industry.length > 0) {
-       const industryFilters = params.industry.map(i => `Industry==${i}`).join('||');
-       filters += (filters ? ',' : '') + `(${industryFilters})`;
-    }
-
-    const queryParams = new URLSearchParams({
-      page: params.page.toString(),
-      pageSize: params.limit.toString(),
-      sorts: sorts,
-    });
-    if (filters) queryParams.append('filters', filters);
-
-    const res = await api.get(`/api/Projects/non-premium?${queryParams.toString()}`);
-    
-    const data = res.data || res;
-    const items = data.items || [];
-    
-    const mappedItems = items.map(p => ({
-      ...p,
-      id: p.projectId,
-      startupName: p.startupName || p.organizationName || p.companyName || p.startup?.companyName || 'Startup',
-      name: p.projectName,
-      description: p.shortDescription || 'Chưa có mô tả.',
-      stage: p.developmentStage != null ? STAGE_OPTIONS[p.developmentStage] || p.developmentStage : 'Idea',
-      industry: p.industry != null ? (typeof p.industry === 'number' ? INDUSTRY_OPTIONS[p.industry] : p.industry) : 'Khác',
-      aiScore: p.startupPotentialScore ?? null, // FIXED MAPPING: preserve null for __ placeholder
-      imageUrl: p.projectImageUrl,
-      interestedCount: p.followerCount || 0,
-      createdAt: p.createdAt,
-      targetCustomers: p.targetCustomers,
-      uniqueValueProposition: p.uniqueValueProposition,
-      businessModel: p.businessModel,
-    }));
-
-    return {
-      data: mappedItems,
-      total: data.totalCount ?? (items.length === PAGE_SIZE ? (params.page * PAGE_SIZE) + 1 : items.length),
-      hasMore: items.length === PAGE_SIZE,
-    };
   };
 
   const fetchInitial = useCallback(async (sortKey, filters = activeFilters, isRefresh = false) => {
@@ -418,8 +443,12 @@ export default function DiscoveryScreen() {
                 <Text style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8, textAlign: 'center' }}>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</Text>
               </View>
             ) : (
-              <View style={{ paddingTop: 60 }}>
-                <ActivityIndicator size="large" color={colors.primary} />
+              <View style={{ paddingTop: 20 }}>
+                {[1, 2, 3].map(i => (
+                  <View key={i} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                    <SkeletonCard />
+                  </View>
+                ))}
               </View>
             )
           }
@@ -487,7 +516,24 @@ export default function DiscoveryScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* FLOATING ACTION BUTTON (Bottom Right) */}
+        {user && (user.role === 0 || (typeof user.role === 'string' && user.role.toLowerCase() === 'startup')) && !isLoading && (
+          <TouchableOpacity
+            style={[
+              styles.floatingUploadBtn(colors),
+              { bottom: insets.bottom + 15 } // Lowered even more as requested (was 70)
+            ]}
+            onPress={() => router.push('/startup/create')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.floatingIconCircle(colors)}>
+              <Plus size={32} color="#fff" strokeWidth={3} />
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
+
     </TabScreenWrapper>
   );
 }
@@ -566,4 +612,27 @@ const styles = {
   }),
   chipText: (colors) => ({ color: colors.secondaryText, fontSize: 13, fontWeight: '600' }),
   chipTextActive: (colors) => ({ color: '#fff', fontWeight: '800' }),
+  floatingUploadBtn: (colors) => ({
+    position: 'absolute',
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    zIndex: 1001,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  }),
+  floatingIconCircle: (colors) => ({
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.2)',
+  }),
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Dimensions, Image } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ExpoLinking from 'expo-linking';
 
 import projectSubmissionService from '../../src/services/projectSubmissionService';
+import startupProfileService from '../../src/services/startupProfileService';
 import AIEvaluationService from '../../src/services/AIEvaluationService';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -23,6 +24,7 @@ export default function StartupDetailScreen() {
   const { user } = useAuth();
 
   const [project, setProject] = useState(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [aiHistory, setAiHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +71,33 @@ export default function StartupDetailScreen() {
 
       if (pRes?.success && pRes?.data) {
         const d = pRes.data;
+        
+        // Ownership check
+        if (user && (user.role === 'startup' || user.role === 'Startup' || String(user.role) === '2')) {
+          try {
+            const meRes = await startupProfileService.getStartupProfileByUserId(user.userId);
+            if (meRes && d.startupId === meRes.id) {
+              setIsOwner(true);
+              // If owner, fetch full details if not already fetched
+              if (!isInvestorOrPremium) {
+                const fullRes = await projectSubmissionService.getProjectById(id);
+                if (fullRes?.success && fullRes.data) {
+                  setProject({
+                    ...fullRes.data,
+                    name: fullRes.data.projectName || 'Dự án',
+                    stage: fullRes.data.developmentStage || 'Ý tưởng',
+                    status: fullRes.data.status || 'Pending',
+                    tags: fullRes.data.keySkills ? fullRes.data.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
+                  });
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            console.log('Error checking ownership:', e);
+          }
+        }
+
         setProject({
           ...d,
           name: d.projectName || 'Dự án',
@@ -225,17 +254,54 @@ export default function StartupDetailScreen() {
       {[left, right].map((col, i) => (
         <View key={i} style={{ flex: 1 }}>
           <FieldLabel>{col.label}</FieldLabel>
-          {col.isPremium ? (
-            <PremiumLock />
-          ) : (
             <Text style={{ fontSize: 13.5, color: col.value ? colors.text : colors.secondaryText, lineHeight: 19 }}>
-              {col.value || '—'}
+              {isOwner ? (col.value || '—') : (col.isPremium ? <PremiumLock /> : (col.value || '—'))}
             </Text>
-          )}
         </View>
       ))}
     </View>
   );
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+        <View style={{ 
+          width: 80, height: 80, borderRadius: 40, 
+          backgroundColor: colors.primary + '15', 
+          justifyContent: 'center', alignItems: 'center',
+          marginBottom: 24 
+        }}>
+          <Ionicons name="lock-closed" size={40} color={colors.primary} />
+        </View>
+        <Text style={{ color: colors.text, fontSize: 22, fontWeight: '900', textAlign: 'center' }}>
+          Yêu cầu đăng nhập
+        </Text>
+        <Text style={{ color: colors.secondaryText, fontSize: 15, marginTop: 12, textAlign: 'center', lineHeight: 22 }}>
+          Vui lòng đăng nhập hoặc đăng ký tài khoản Startup để xem chi tiết dự án và tài liệu đi kèm.
+        </Text>
+        
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/login')}
+          style={{ 
+            marginTop: 32, backgroundColor: colors.primary, 
+            width: '100%', height: 54, borderRadius: 16,
+            justifyContent: 'center', alignItems: 'center',
+            shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3, shadowRadius: 8, elevation: 4
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Đăng nhập ngay</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{ marginTop: 20 }}
+        >
+          <Text style={{ color: colors.secondaryText, fontWeight: '600' }}>Quay lại khám phá</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -293,17 +359,21 @@ export default function StartupDetailScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <View style={{
               width: 72, height: 72, borderRadius: 36,
-              backgroundColor: getAvatarColor(project.name),
+              backgroundColor: getAvatarColor(project.startupCompanyName || project.name),
               justifyContent: 'center', alignItems: 'center',
-              shadowColor: getAvatarColor(project.name),
+              shadowColor: getAvatarColor(project.startupCompanyName || project.name),
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: isDark ? 0.6 : 0.25,
               shadowRadius: 12,
               elevation: 8,
             }}>
-              <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>
-                {project.name.charAt(0).toUpperCase()}
-              </Text>
+              {project.startupLogoUrl ? (
+                <Image source={{ uri: project.startupLogoUrl }} style={{ width: '100%', height: '100%', borderRadius: 36 }} />
+              ) : (
+                <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>
+                  {(project.startupCompanyName || project.name).charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             <Text style={{ fontSize: 24, fontWeight: '900', color: colors.text, flex: 1 }}>
               {project.name}
@@ -353,7 +423,11 @@ export default function StartupDetailScreen() {
               }}>
                 {stat.icon}
                 <View style={{ marginTop: 8, alignItems: 'center' }}>
-                  {stat.isPremium ? (
+                  {isOwner ? (
+                    <Text style={{ fontSize: 18, fontWeight: '800', color: index === 2 ? '#F5A623' : colors.text, marginBottom: 4 }}>
+                      {stat.value || '—'}
+                    </Text>
+                  ) : stat.isPremium ? (
                       <View style={{
                         flexDirection: 'row', alignItems: 'center', gap: 4,
                         backgroundColor: isDark ? '#3D2B00' : '#FFF9E6',
@@ -412,21 +486,52 @@ export default function StartupDetailScreen() {
           </View>
         </SectionCard>
 
+        {/* HÌNH ẢNH DỰ ÁN */}
+        <SectionCard
+          icon={<Ionicons name="image-outline" size={16} color={colors.primary} />}
+          title="HÌNH ẢNH DỰ ÁN"
+          accentColor={colors.primary}
+        >
+          {project.projectImageUrl ? (
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={() => {
+                // Potential fullscreen view logic
+              }}
+              style={{ borderRadius: 12, overflow: 'hidden', height: 180, width: '100%', backgroundColor: colors.mutedBackground }}
+            >
+              <Image 
+                source={{ uri: project.projectImageUrl }} 
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBackground, borderRadius: 12 }}>
+              <Ionicons name="image-outline" size={32} color={colors.border} />
+              <Text style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8 }}>Không có hình ảnh mô tả</Text>
+            </View>
+          )}
+        </SectionCard>
+
         {/* ĐỘI NGŨ */}
         <SectionCard
           icon={<Ionicons name="people-outline" size={16} color="#A78BFA" />}
           title="ĐỘI NGŨ"
           accentColor="#A78BFA"
         >
-          <FieldLabel>THÀNH VIÊN & VAI TRÒ</FieldLabel>
-          {project.teamMembers ? (
+          {isOwner ? (
+             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.teamMembers || '—'}</Text>
+          ) : project.teamMembers ? (
              <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.teamMembers}</Text>
           ) : (
             <PremiumLock />
           )}
           <Divider />
           <FieldLabel>KỸ NĂNG CỐT LÕI</FieldLabel>
-          {project.keySkills ? (
+          {isOwner ? (
+             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.keySkills || '—'}</Text>
+          ) : project.keySkills ? (
              <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.keySkills}</Text>
           ) : (
             <PremiumLock />
@@ -528,7 +633,9 @@ export default function StartupDetailScreen() {
 
           <View style={{ marginTop: 12 }}>
             <FieldLabel>MÔ HÌNH KINH DOANH</FieldLabel>
-            {project.businessModel ? (
+            {isOwner ? (
+               <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.businessModel || '—'}</Text>
+            ) : project.businessModel ? (
                <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.businessModel}</Text>
             ) : (
               <PremiumLock />

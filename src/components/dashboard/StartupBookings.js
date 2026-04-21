@@ -35,6 +35,7 @@ const BOOKING_STATUS_LABELS = {
 };
 
 const FILTER_TABS = [
+  { id: 'All', label: 'Tất cả' },
   { id: 'ApprovedAwaitingPayment', label: 'Chờ thanh toán' },
   { id: 'Pending', label: 'Chờ duyệt' },
   { id: 'Confirmed', label: 'Đã xác nhận' },
@@ -54,7 +55,7 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('ApprovedAwaitingPayment');
+  const [filterStatus, setFilterStatus] = useState('All');
   const [chatLoadingId, setChatLoadingId] = useState(null);
 
   // Modal States
@@ -105,7 +106,13 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     if (type === 'detail') setShowDetailModal(true);
     if (type === 'chat') handleChat(item);
     if (type === 'report') setShowReportModal(true);
-    if (type === 'complain') setShowComplaintModal(true);
+    if (type === 'complain') {
+      setShowDetailModal(false);
+      // Small timeout to allow the detail modal to close before showing complaint
+      setTimeout(() => {
+        setShowComplaintModal(true);
+      }, 300);
+    }
     if (type === 'rebook') onAction?.('rebook', item);
     if (type === 'pay') onAction?.('pay', item);
   };

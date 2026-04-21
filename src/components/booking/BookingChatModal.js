@@ -135,8 +135,21 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
-      await chatService.sendChatMessage(sessionId, content);
-      // SignalR will provide the real message soon
+      const response = await chatService.sendChatMessage(sessionId, content);
+      
+      // Fallback: If SignalR echoes it back, it will ignore it because the ID matches.
+      // But if SignalR is slow or doesn't echo to the sender, we update the optimistic message here.
+      if (response && (response.success || response.isSuccess || response.data)) {
+        const realMsg = response.data || response;
+        setMessages(prev => prev.map(m => m.id === tempId ? {
+          ...realMsg,
+          id: realMsg.chatMessageId || realMsg.id || realMsg.chat_message_id || tempId,
+          text: realMsg.content || realMsg.Content || content,
+          isMine: true,
+          timestamp: realMsg.sentAt || realMsg.createdAt || realMsg.SentAt || new Date().toISOString(),
+          isOptimistic: false // Clears "Đang gửi..." status
+        } : m));
+      }
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể gửi tin nhắn.');
       setMessages(prev => prev.filter(m => m.id !== tempId));

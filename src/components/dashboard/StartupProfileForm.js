@@ -183,7 +183,7 @@ export default function StartupProfileForm({ initialData, user, onSuccess }) {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Card style={styles.formCard}>
+      <View style={styles.formContent}>
         <View style={styles.sectionHeader}>
           <Building2 size={24} color={colors.primary} />
           <View style={styles.sectionText}>
@@ -300,15 +300,14 @@ export default function StartupProfileForm({ initialData, user, onSuccess }) {
             style={styles.submitBtn}
           />
         </View>
-      </Card>
-      <View style={{ height: 40 }} />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  formCard: { padding: 20 },
+  formContent: { padding: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
   sectionText: { flex: 1 },
   sectionTitle: { fontSize: 16, fontWeight: '800' },

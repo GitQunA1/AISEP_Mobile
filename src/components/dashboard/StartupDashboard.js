@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Animated, RefreshControl, ActivityIndicator, Dimensions, Modal, Alert
 } from 'react-native';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import {
   TrendingUp, Users, FileText, CheckCircle,
   Eye, Plus, ChevronRight, Target, MessageSquare, Briefcase, Calendar
@@ -35,10 +36,9 @@ import PaymentModal from '../PaymentModal';
 const { width } = Dimensions.get('window');
 
 const TABS = [
-  { id: 'overview', label: 'Tổng quan' },
   { id: 'projects', label: 'Dự án' },
   { id: 'connections', label: 'Kết nối' },
-  { id: 'bookings', label: 'Lịch tư vấn' },
+  { id: 'bookings', label: 'Cố vấn' },
   { id: 'deals', label: 'Đầu tư' },
   { id: 'profile', label: 'Hồ sơ' },
 ];
@@ -48,7 +48,7 @@ export default function StartupDashboard() {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('projects');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -86,6 +86,16 @@ export default function StartupDashboard() {
   const scrollX = useRef(new Animated.Value(0)).current;
   const pagerRef = useRef(null);
   const tabsScrollRef = useRef(null);
+  const mainScrollRef = useRef(null);
+  useScrollToTop(mainScrollRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, [])
+  );
 
   // SignalR Initialization
   useEffect(() => {
@@ -131,9 +141,10 @@ export default function StartupDashboard() {
         if (profileRes.industry) compl += 10;
       }
 
+      // Sync stats (if needed for summary numbers on tabs)
       setStats({
         profileViews: profileRes?.followers?.length || 0,
-        investorInterests: investorRequests.length,
+        investorInterests: 0, 
         documentsUploaded: 0,
         aiScore: profileRes?.projects?.[0]?.aiEvaluation?.startupScore || projects[0]?.aiEvaluation?.startupScore || 0,
         completion: compl
@@ -429,14 +440,16 @@ export default function StartupDashboard() {
         scrollEventThrottle={16}
       >
         <View style={{ width }}>
-          <ScrollView refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
-            {renderOverview()}
+          <ScrollView 
+            ref={mainScrollRef}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
+            {renderProjects()}
           </ScrollView>
         </View>
 
-        <View style={{ width }}>
-          <ScrollView>{renderProjects()}</ScrollView>
-        </View>
+        {/* Projects Tab content already handled in first view of pager */}
+
 
         <View style={{ width }}>
           <View style={{ flex: 1, paddingHorizontal: 0, paddingTop: 20 }}>
@@ -602,13 +615,14 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   tabBar: { borderBottomWidth: 1 },
   tabScrollContainer: { paddingHorizontal: 10 },
+  tabLabel: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   tabItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
-  tabLabel: { fontSize: 14, fontWeight: '800' },
   tabContent: { padding: 20 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, marginBottom: 24 },
   statCard: { width: (width - 52) / 2, padding: 18, borderRadius: 24, borderWidth: 1 },

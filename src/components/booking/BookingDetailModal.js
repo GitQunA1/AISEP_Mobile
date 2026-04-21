@@ -86,13 +86,13 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
               
               <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.profileLabel, { color: colors.secondaryText }]}>
-                  {userRole === 'Startup' ? 'Startup / Khách hàng' : 'Nhà đầu tư / Khách hàng'}
+                  {userRole === 'Startup' ? 'Dự án của bạn' : 'Khách hàng / Startup'}
                 </Text>
                 <Text style={[styles.profileName, { color: colors.accentGreen }]}>
-                  {booking.projectName || (userRole === 'Startup' ? 'Dự án của bạn' : 'Khách hàng')}
+                  {booking.projectName || 'Dự án'}
                 </Text>
                 <Text style={[styles.profileId, { color: colors.secondaryText }]}>
-                  Mã: {booking.projectId || booking.customerId || '—'}
+                  {booking.projectId ? `Mã dự án: ${booking.projectId}` : booking.customerId ? `Mã KH: ${booking.customerId}` : '—'}
                 </Text>
               </View>
             </View>

@@ -7,6 +7,7 @@ import {
 import { Search, Filter, TrendingUp, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 
 import investorService from '../../src/services/investorService';
 import { useAuth } from '../../src/context/AuthContext';
@@ -23,6 +24,16 @@ export default function InvestorsScreen() {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const insets = useSafeAreaInsets();
+  const listRef = useRef(null);
+  useScrollToTop(listRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (listRef.current) {
+        listRef.current.scrollToOffset({ offset: 0, animated: false });
+      }
+    }, [])
+  );
 
   const [investors, setInvestors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -191,12 +202,14 @@ export default function InvestorsScreen() {
 
         {/* FEED SECTION */}
         <FlatList
+          ref={listRef}
           data={isLoading ? [1, 2, 3] : filteredInvestors}
           renderItem={({ item }) => isLoading ? (
             <InvestorSkeletonCard />
           ) : (
             <InvestorCard 
               investor={item} 
+              user={user}
               onViewProfile={(id) => router.push(`/investor/${id}`)}
               onConnect={() => handleConnect(item)}
             />

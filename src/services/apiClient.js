@@ -19,6 +19,9 @@ export const apiClient = axios.create({
 let refreshPromise = null;
 let isAlertVisible = false;
 
+// flag to suppress session expired alerts during intentional logout
+apiClient.isManualLogout = false;
+
 // Request interceptor to inject JWT token from AsyncStorage
 apiClient.interceptors.request.use(
   async (config) => {
@@ -86,38 +89,24 @@ apiClient.interceptors.response.use(
         }
       }
 
-      // If we reach here, either no refresh token or refresh failed
-      console.log('[ApiClient] Session expired. Clearing data...');
-      await AsyncStorage.removeItem('aisep_token');
-      await AsyncStorage.removeItem('aisep_refresh_token');
-      await AsyncStorage.removeItem('aisep_user');
-      
-      // Emit event so AuthContext can update user state internally
-      eventEmitter.emit('session_expired');
-
-      // Show native alert and redirect only if not already showing
-      if (!isAlertVisible) {
+      // Show native alert and redirect only if not already showing AND not a manual logout
+      if (!isAlertVisible && !apiClient.isManualLogout) {
         isAlertVisible = true;
+
+        // IMMEDIATE EVICTION: Clear tokens now so background requests fail early or see no token
+        console.log('[ApiClient] Session expired. Clearing tokens immediately...');
+        await AsyncStorage.multiRemove(['aisep_token', 'aisep_refresh_token', 'aisep_user']);
+        
+        // Emit event so AuthContext can update user state internally
+        eventEmitter.emit('session_expired');
+
         Alert.alert(
           'Phiên làm việc hết hạn',
-          'Phiên làm việc của bạn đã kết thúc. Vui lòng đăng nhập lại để tiếp tục.',
-          [
-            { 
-              text: 'Đăng nhập lại', 
-              onPress: () => {
-                isAlertVisible = false;
-                router.replace('/(auth)/login');
-              } 
-            },
-            {
-              text: 'Về trang chủ',
-              style: 'cancel',
-              onPress: () => {
-                isAlertVisible = false;
-                router.replace('/(tabs)');
-              }
-            }
-          ],
+          'Vui lòng đăng nhập lại để tiếp tục sử dụng ứng dụng.',
+          [{ text: 'Đăng nhập', onPress: () => { 
+            isAlertVisible = false;
+            router.replace('/(auth)/login');
+          }}],
           { cancelable: false }
         );
       }

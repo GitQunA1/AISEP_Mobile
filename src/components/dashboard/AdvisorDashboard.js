@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, 
   Animated, RefreshControl, ActivityIndicator, Dimensions, Alert 
 } from 'react-native';
+import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { 
   Calendar, Star, Clock, MessageSquare, 
   CheckCircle, Briefcase, ChevronRight, Users, Bell, FileText
@@ -61,6 +62,16 @@ export default function AdvisorDashboard() {
 
   const pagerRef = useRef(null);
   const tabsScrollRef = useRef(null);
+  const mainScrollRef = useRef(null);
+  useScrollToTop(mainScrollRef);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, [])
+  );
 
   const fetchData = async () => {
     if (!user?.userId) return;
@@ -116,6 +127,14 @@ export default function AdvisorDashboard() {
       Alert.alert('Lỗi', 'Không thể khởi tạo phòng chat.');
     } finally {
       setChatLoadingId(null);
+    }
+  };
+
+  const handleBookingAction = (type, booking) => {
+    if (type === 'chat') handleChat(booking);
+    if (type === 'report') {
+      setShowDetailModal(false);
+      setTimeout(() => setShowReportModal(true), 300);
     }
   };
 
@@ -266,7 +285,10 @@ export default function AdvisorDashboard() {
         scrollEventThrottle={16}
       >
         <View style={{ width }}>
-          <ScrollView refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+          <ScrollView 
+            ref={mainScrollRef}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
             {renderOverview()}
           </ScrollView>
         </View>
@@ -324,6 +346,7 @@ export default function AdvisorDashboard() {
           isVisible={showDetailModal}
           onClose={() => setShowDetailModal(false)}
           booking={selectedBooking}
+          onAction={handleBookingAction}
           userRole="Advisor"
         />
       )}

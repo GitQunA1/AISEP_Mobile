@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { LayoutDashboard } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
@@ -15,6 +17,7 @@ const ROLE_SUBTITLES = {
 };
 
 export default function DashboardRouter() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { activeTheme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -25,6 +28,36 @@ export default function DashboardRouter() {
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <TabScreenWrapper>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <View style={styles.guestContainer}>
+            <View style={[styles.guestIconContainer, { backgroundColor: colors.secondaryBackground }]}>
+              <LayoutDashboard size={64} color={colors.secondaryText} />
+            </View>
+            <Text style={[styles.guestTitle, { color: colors.text }]}>Quản lý AISEP</Text>
+            <Text style={[styles.guestSubtitle, { color: colors.secondaryText }]}>
+              Đăng nhập để theo dõi tiến độ dự án, quản lý lịch tư vấn và kết nối với mạng lưới chuyên gia.
+            </Text>
+            <TouchableOpacity 
+              style={[styles.authBtn, { backgroundColor: colors.primary }]} 
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <Text style={styles.authBtnText}>Đăng nhập ngay</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.registerLink}
+              onPress={() => router.push('/(auth)/register')}
+            >
+              <Text style={[styles.registerText, { color: colors.primary }]}>Chưa có tài khoản? Đăng ký miễn phí</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TabScreenWrapper>
     );
   }
 
@@ -83,4 +116,13 @@ const styles = StyleSheet.create({
     marginTop: 2, 
     lineHeight: 18 
   },
+  container: { flex: 1 },
+  guestContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  guestIconContainer: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  guestTitle: { fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' },
+  guestSubtitle: { fontSize: 16, textAlign: 'center', marginBottom: 32, lineHeight: 24 },
+  authBtn: { width: '100%', height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  authBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  registerLink: { marginTop: 20 },
+  registerText: { fontSize: 15, fontWeight: '600' },
 });
