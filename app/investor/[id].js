@@ -109,7 +109,7 @@ export default function InvestorDetailScreen() {
   const AVATAR_COLOR = '#17BF63';
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.background }}>
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -118,7 +118,7 @@ export default function InvestorDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* HERO */}
         <LinearGradient
           colors={isDark ? ['#062016', '#0a0a0a'] : ['#e6fffa', colors.background]}

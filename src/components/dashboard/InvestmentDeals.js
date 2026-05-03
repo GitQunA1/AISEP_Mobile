@@ -1,142 +1,188 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { Briefcase, Clock, User, Check, X, FileSignature } from 'lucide-react-native';
+import { 
+  View, Text, StyleSheet, TouchableOpacity, 
+  FlatList, ActivityIndicator, Dimensions 
+} from 'react-native';
+import { 
+  Briefcase, CheckCircle, XCircle, Clock, 
+  ChevronRight, ShieldCheck, FileSignature, DollarSign, ArrowRight, FileText, User
+} from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../Card';
 import FadeInView from '../FadeInView';
-import dealsService from '../../services/dealsService';
 
-/**
- * InvestmentDeals - Displays investment offers from investors for Startups
- * Ported from Web version for feature parity
- */
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const DEAL_STATUS_MAP = {
+  0: { label: 'Chờ xác nhận', color: '#f59e0b', icon: Clock },
+  'PENDING': { label: 'Chờ xác nhận', color: '#f59e0b', icon: Clock },
+  1: { label: 'Đã xác nhận', color: '#10b981', icon: CheckCircle },
+  'CONFIRMED': { label: 'Đã xác nhận', color: '#10b981', icon: CheckCircle },
+  'ACCEPTED': { label: 'Đã xác nhận', color: '#10b981', icon: CheckCircle },
+  2: { label: 'Chờ ký', color: '#f97316', icon: FileSignature },
+  'WAITING_FOR_STARTUP_SIGNATURE': { label: 'Chờ ký', color: '#f97316', icon: FileSignature },
+  3: { label: 'Đã ký kết', color: '#667eea', icon: FileSignature },
+  'CONTRACT_SIGNED': { label: 'Đã ký kết', color: '#667eea', icon: FileSignature },
+  'SIGNED': { label: 'Đã ký kết', color: '#667eea', icon: FileSignature },
+  4: { label: 'Minted NFT', color: '#8b5cf6', icon: ShieldCheck },
+  'MINTED_NFT': { label: 'Minted NFT', color: '#8b5cf6', icon: ShieldCheck },
+  5: { label: 'Bị từ chối', color: '#ef4444', icon: XCircle },
+  'REJECTED': { label: 'Bị từ chối', color: '#ef4444', icon: XCircle },
+  6: { label: 'Thất bại', color: '#dc2626', icon: XCircle },
+  'FAILED': { label: 'Thất bại', color: '#dc2626', icon: XCircle },
+  7: { label: 'Hoàn tất', color: '#10b981', icon: CheckCircle },
+  'COMPLETED': { label: 'Hoàn tất', color: '#10b981', icon: CheckCircle },
+};
+
 export default function InvestmentDeals({ 
-  deals = [], 
+  deals, 
+  isLoading, 
   onApprove, 
   onReject, 
-  onSign,
-  isLoading,
+  onSign, 
+  onVerifyOnchain,
+  onViewProfile,
   onRefresh,
-  isRespondingId,
-  isInvestor = false
+  isRespondingId 
 }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
 
+  const renderHeader = () => {
+    const stats = {
+      total: deals.length,
+      pending: deals.filter(d => ['PENDING', 'WAITING_FOR_STARTUP_SIGNATURE'].includes(d.statusStr) || [0, 2].includes(d.status)).length,
+      completed: deals.filter(d => ['CONTRACT_SIGNED', 'COMPLETED', 'MINTED_NFT'].includes(d.statusStr) || [3, 4, 7].includes(d.status)).length,
+    };
+
+    const CARD_WIDTH = (SCREEN_WIDTH - 40 - 20) / 3;
+
+    return (
+      <View style={styles.statsContainer}>
+        <View style={styles.statsRow}>
+          <StatItem label="Tổng" value={stats.total} color={colors.text} colors={colors} width={CARD_WIDTH} />
+          <StatItem label="Đang chờ" value={stats.pending} color="#f59e0b" colors={colors} width={CARD_WIDTH} />
+          <StatItem label="Hoàn tất" value={stats.completed} color="#10b981" colors={colors} width={CARD_WIDTH} />
+        </View>
+      </View>
+    );
+  };
+
   const renderItem = ({ item }) => {
-    // Web status mapping: 0=Pending, 1=Confirmed, 2=Waiting_For_Startup_Signature, 3=Contract_Signed, 4=Minted_NFT, 5=Rejected, 6=Failed
-    const statusInfo = dealsService.getStatusInfo(item.status);
-    const isPending = item.status === 'Pending' || item.status === 0;
-    const isConfirmed = item.status === 'Confirmed' || item.status === 1;
-    const isWaitingSignature = item.status === 'Waiting_For_Startup_Signature' || item.status === 2;
-    const isSigned = (item.status === 'Contract_Signed' || item.status === 3) || (item.status === 'Minted_NFT' || item.status === 4);
-    const isProcessing = isRespondingId === item.dealId;
+    const status = DEAL_STATUS_MAP[item.statusStr] || DEAL_STATUS_MAP[item.status] || { label: String(item.status), color: colors.primary, icon: Briefcase };
+    const isResponding = isRespondingId === item.dealId;
+    
+    const canVerify = ['CONFIRMED', 'ACCEPTED', 'WAITING_FOR_STARTUP_SIGNATURE'].includes(item.statusStr) || [1, 2].includes(item.status);
+    const isProcessed = ['CONTRACT_SIGNED', 'MINTED_NFT', 'COMPLETED'].includes(item.statusStr) || [3, 4, 7].includes(item.status);
+    const hasBlockchain = item.statusStr === 'MINTED_NFT' || item.statusStr === 'COMPLETED' || [4, 7].includes(item.status);
+
+    const formatCurrency = (amount) => {
+      if (!amount) return '0 đ';
+      return amount.toLocaleString('vi-VN') + ' đ';
+    };
 
     return (
       <FadeInView>
-        <Card style={[styles.card, { borderTopColor: statusInfo.color }]}>
-          <View style={styles.header}>
-            <View style={[styles.statusBadge, { backgroundColor: statusInfo.color + '15' }]}>
-              <Text style={[styles.statusText, { color: statusInfo.color }]}>
-                {statusInfo.labelVi || statusInfo.label}
-              </Text>
-            </View>
-            <View style={styles.dateContainer}>
-              <Clock size={12} color={colors.secondaryText} />
-              <Text style={[styles.dateText, { color: colors.secondaryText }]}>
-                {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.dealInfo}>
-            <View style={styles.infoRow}>
-              <User size={16} color={colors.primary} />
-              <Text style={[styles.infoText, { color: colors.text }]}>
-                {isInvestor ? 'Startup: ' : 'NĐT: '}
-                <Text style={{ fontWeight: '800' }}>
-                  {isInvestor ? (item.startupName || item.projectName) : (item.investorName || 'Nhà đầu tư')}
-                </Text>
-              </Text>
-            </View>
-            
-            <View style={styles.infoRow}>
-              <Briefcase size={16} color={colors.accentCyan} />
-              <Text style={[styles.infoText, { color: colors.text }]}>
-                Dự án: <Text style={{ fontWeight: '800' }}>{item.projectName || 'Tên dự án'}</Text>
-              </Text>
-            </View>
-
-            {item.investmentAmount && (
-              <View style={[styles.amountBadge, { backgroundColor: colors.accentGreen + '10' }]}>
-                <Text style={[styles.amountText, { color: colors.accentGreen }]}>
-                  💰 {item.investmentAmount.toLocaleString('vi-VN')} VNĐ
+        <Card style={styles.dealCard}>
+          <TouchableOpacity 
+            style={styles.cardHeader} 
+            onPress={() => onViewProfile(item.investorId)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.investorInfo}>
+              <View style={[styles.avatar, { backgroundColor: colors.accentCyan + '20' }]}>
+                <DollarSign size={20} color={colors.accentCyan} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.nameRow}>
+                  <Text style={[styles.investorName, { color: colors.text }]} numberOfLines={1}>
+                    {item.investorName || 'Nhà đầu tư'}
+                  </Text>
+                  <ChevronRight size={14} color={colors.border} />
+                </View>
+                <Text style={[styles.projectName, { color: colors.secondaryText }]} numberOfLines={1}>
+                  Dự án: {item.projectName || 'Dự án'}
                 </Text>
               </View>
-            )}
+            </View>
+            <View style={[styles.statusBadge, { borderColor: status.color, backgroundColor: status.color + '10' }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.amountRow}>
+            <View style={styles.amountItem}>
+              <Text style={[styles.amountLabel, { color: colors.secondaryText }]}>Số vốn đề nghị</Text>
+              <Text style={[styles.amountValue, { color: colors.accentCyan }]}>
+                {formatCurrency(item.amount)}
+              </Text>
+            </View>
+            <ArrowRight size={16} color={colors.border} />
+            <View style={styles.amountItem}>
+              <Text style={[styles.amountLabel, { color: colors.secondaryText }]}>Cổ phần</Text>
+              <Text style={[styles.amountValue, { color: colors.text }]}>
+                {item.equityOffer}%
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.actions}>
-            {isPending && (
+          <View style={styles.metaRow}>
+            <Clock size={14} color={colors.secondaryText} />
+            <Text style={[styles.metaText, { color: colors.secondaryText }]}>
+              {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+            </Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            {(item.statusStr === 'PENDING' || item.status === 0) && (
               <>
                 <TouchableOpacity 
-                  style={[styles.actionBtn, { backgroundColor: colors.accentGreen }]}
-                  onPress={() => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    onApprove(item.dealId);
-                  }}
-                  disabled={isProcessing}
+                  style={[styles.actionBtn, styles.primaryBtn, { backgroundColor: colors.accentCyan }]}
+                  onPress={() => onApprove(item.dealId)}
+                  disabled={isResponding}
                 >
-                  {isProcessing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Check size={16} color="#fff" />
-                      <Text style={styles.btnText}>Chấp nhận</Text>
-                    </>
-                  )}
+                  {isResponding ? <ActivityIndicator size="small" color="#fff" /> : <CheckCircle size={20} color="#fff" />}
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.actionBtn, { backgroundColor: colors.error }]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    onReject(item.dealId);
-                  }}
-                  disabled={isProcessing}
+                  style={[styles.actionBtn, { backgroundColor: colors.mutedBackground }]}
+                  onPress={() => onReject(item.dealId)}
+                  disabled={isResponding}
                 >
-                  <Text style={styles.btnText}>Từ chối</Text>
+                  <XCircle size={20} color={colors.error} />
                 </TouchableOpacity>
               </>
             )}
 
-            {(isConfirmed || isWaitingSignature) && (
+            {(canVerify || isProcessed) && (
               <TouchableOpacity 
-                style={[styles.actionBtn, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onSign(item);
-                }}
+                style={[
+                  styles.actionBtn, 
+                  styles.primaryBtn, 
+                  { backgroundColor: colors.primary }
+                ]}
+                onPress={() => onSign(item)}
               >
-                <FileSignature size={18} color="#fff" />
-                <Text style={styles.btnText}>
-                  {isWaitingSignature ? 'Xem & Ký hợp đồng' : 'Ký hợp đồng'}
-                </Text>
+                <FileText size={20} color="#fff" />
               </TouchableOpacity>
             )}
 
-            {isSigned && (
+            {hasBlockchain && (
               <TouchableOpacity 
-                style={[styles.actionBtn, { backgroundColor: colors.accentCyan }]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onSign(item);
-                }}
+                style={[styles.actionBtn, styles.primaryBtn, { backgroundColor: '#2563eb', flex: 1 }]}
+                onPress={() => onVerifyOnchain(item)}
               >
-                <Check size={18} color="#fff" />
-                <Text style={styles.btnText}>Xem hợp đồng đã ký</Text>
+                <ShieldCheck size={20} color="#fff" />
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: colors.mutedBackground }]}
+              onPress={() => onViewProfile(item.investorId)}
+            >
+              <User size={20} color={colors.text} />
+            </TouchableOpacity>
           </View>
         </Card>
       </FadeInView>
@@ -146,16 +192,20 @@ export default function InvestmentDeals({
   return (
     <FlatList
       data={deals}
-      keyExtractor={(item) => item.dealId.toString()}
       renderItem={renderItem}
+      keyExtractor={item => item.dealId.toString()}
+      ListHeaderComponent={renderHeader}
       contentContainerStyle={styles.listContent}
       onRefresh={onRefresh}
       refreshing={isLoading}
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
-          <Briefcase size={48} color={colors.border} />
+          <View style={[styles.emptyIconContainer, { backgroundColor: colors.accentCyan + '10' }]}>
+            <Briefcase size={48} color={colors.accentCyan} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Không có thỏa thuận</Text>
           <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
-            Không có ưu đãi đầu tư nào cần xử lý.
+            Các đề xuất đầu tư và thỏa thuận góp vốn sẽ hiển thị tại đây để bạn xử lý.
           </Text>
         </View>
       }
@@ -163,95 +213,55 @@ export default function InvestmentDeals({
   );
 }
 
+function StatItem({ label, value, color, colors, width }) {
+  return (
+    <View style={[styles.statItem, { backgroundColor: colors.card, borderColor: colors.border, width }]}>
+      <Text style={[styles.statLabel, { color: colors.secondaryText }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.statValue, { color }]} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  listContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  card: {
-    padding: 16,
-    marginBottom: 16,
-    borderTopWidth: 3,
-    borderRadius: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  statsContainer: { paddingVertical: 16 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  statItem: {
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center'
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dateText: {
-    fontSize: 12,
-  },
-  dealInfo: {
-    gap: 10,
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  infoText: {
-    fontSize: 14,
-  },
-  amountBadge: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  amountText: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    paddingTop: 16,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+  statLabel: { fontSize: 9, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
+  statValue: { fontSize: 16, fontWeight: '900' },
+  dealCard: { padding: 16, marginBottom: 16, borderRadius: 20 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  investorInfo: { flexDirection: 'row', gap: 12, flex: 1 },
+  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  investorName: { fontSize: 16, fontWeight: '800' },
+  projectName: { fontSize: 13, fontWeight: '600' },
+  statusBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  divider: { height: 1, marginVertical: 12, opacity: 0.5 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
+  amountItem: { flex: 1 },
+  amountLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+  amountValue: { fontSize: 17, fontWeight: '900' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  metaText: { fontSize: 12, fontWeight: '500' },
+  cardActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  actionBtn: { 
     flex: 1,
-  },
-  btnText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  emptyContainer: {
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 100,
-    gap: 16,
   },
-  emptyText: {
-    fontSize: 15,
-    textAlign: 'center',
-    maxWidth: '80%',
-  },
+  primaryBtn: { elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2 },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, paddingHorizontal: 40 },
+  emptyIconContainer: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', marginBottom: 10 },
+  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

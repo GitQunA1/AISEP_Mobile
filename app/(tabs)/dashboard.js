@@ -1,14 +1,17 @@
 import React from 'react';
+// v1.0.1 - Refreshing Expo Router cache
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { LayoutDashboard } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { LayoutDashboard, Bell } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useNotifications } from '../../src/context/NotificationContext';
 import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
 import StartupDashboard from '../../src/components/dashboard/StartupDashboard';
 import InvestorDashboard from '../../src/components/dashboard/InvestorDashboard';
 import AdvisorDashboard from '../../src/components/dashboard/AdvisorDashboard';
+import NotificationCenter from '../../src/components/common/NotificationCenter';
 
 const ROLE_SUBTITLES = {
   startup: 'Theo dõi tiến độ và quản lý dự án của bạn',
@@ -18,10 +21,13 @@ const ROLE_SUBTITLES = {
 
 export default function DashboardRouter() {
   const router = useRouter();
+  const { tab } = useLocalSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { activeTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const colors = activeTheme.colors;
+  const { unreadCount } = useNotifications();
+  const [showNotifications, setShowNotifications] = React.useState(false);
 
   if (authLoading) {
     return (
@@ -68,13 +74,13 @@ export default function DashboardRouter() {
   const renderDashboard = () => {
     switch (roleStr) {
       case 'startup':
-        return <StartupDashboard />;
+        return <StartupDashboard initialTab={tab} />;
       case 'investor':
-        return <InvestorDashboard />;
+        return <InvestorDashboard initialTab={tab} />;
       case 'advisor':
-        return <AdvisorDashboard />;
+        return <AdvisorDashboard initialTab={tab} />;
       default:
-        return <StartupDashboard />;
+        return <StartupDashboard initialTab={tab} />;
     }
   };
 
@@ -87,6 +93,7 @@ export default function DashboardRouter() {
             <Text style={[styles.subtitle, { color: colors.secondaryText }]}>{subtitle}</Text>
           </View>
         </View>
+        
         {renderDashboard()}
       </View>
     </TabScreenWrapper>
@@ -102,7 +109,36 @@ const styles = StyleSheet.create({
   headerRow: { 
     paddingHorizontal: 20, 
     paddingBottom: 4, 
-    marginBottom: 8 
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  notificationBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative'
+  },
+  badge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    paddingHorizontal: 2
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800'
   },
   titleContainer: { 
   },

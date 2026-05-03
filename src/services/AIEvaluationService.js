@@ -72,10 +72,8 @@ class AIEvaluationService {
         return { success: false, message: 'Invalid projectId' };
       }
 
-      console.log('[AI HISTORY] Fetching for project:', projectId);
       const result = await apiClient.get(`/api/StartupAIAnalysis/${projectId}`);
       
-      // Normalize data to always be an array
       const rawData = result.data || result;
       const normalizedData = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
       
@@ -91,6 +89,48 @@ class AIEvaluationService {
         data: [],
         message: error.message || 'Error fetching history'
       };
+    }
+  }
+
+  /**
+   * Investor-triggered AI analysis of a project
+   * POST /api/InvestorAIAnalysis/{projectId}/analyze
+   */
+  static async analyzeProjectByInvestorAPI(projectId) {
+    try {
+      if (!projectId && projectId !== 0) {
+        return { success: false, message: 'Invalid projectId' };
+      }
+      const result = await apiClient.post(`/api/InvestorAIAnalysis/${projectId}/analyze`);
+      return {
+        success: true,
+        data: result.data || result,
+        message: result.message || 'Analysis complete'
+      };
+    } catch (error) {
+      console.error('[INVESTOR AI ANALYSIS] Error:', error);
+      return {
+        success: false,
+        data: null,
+        message: error.response?.data?.message || error.message || 'Error analyzing project'
+      };
+    }
+  }
+
+  /**
+   * Get investor AI analysis history for a project
+   * GET /api/InvestorAIAnalysis/{projectId}
+   */
+  static async getInvestorAnalysisHistory(projectId) {
+    try {
+      const result = await apiClient.get(`/api/InvestorAIAnalysis/${projectId}`);
+      const rawData = result.data || result;
+      return {
+        success: true,
+        data: Array.isArray(rawData) ? rawData : (rawData ? [rawData] : [])
+      };
+    } catch (error) {
+      return { success: false, data: [] };
     }
   }
 

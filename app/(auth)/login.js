@@ -80,7 +80,15 @@ export default function LoginScreen() {
         };
 
         // NEW: Strictly enforce Startup only role for Mobile App
-        const roleStr = typeof user.role === 'string' ? user.role.toLowerCase() : (user.role === 0 ? 'startup' : '');
+        let roleStr = '';
+        if (typeof user.role === 'string') {
+          roleStr = user.role.toLowerCase();
+        } else if (Array.isArray(user.role)) {
+          roleStr = user.role.map(r => String(r).toLowerCase()).includes('startup') ? 'startup' : '';
+        } else if (user.role === 0) {
+          roleStr = 'startup';
+        }
+
         if (roleStr !== 'startup') {
           setIsLoading(false);
           Alert.alert(

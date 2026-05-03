@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
   TextInput, FlatList, KeyboardAvoidingView, Platform,
-  ActivityIndicator, SafeAreaView, Keyboard, Alert
+  ActivityIndicator, Keyboard, Alert
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Send, User, RotateCcw, AlertCircle, Loader2 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import chatService from '../../services/chatService';
@@ -11,7 +12,7 @@ import signalRService from '../../services/signalRService';
 import { useAuth } from '../../context/AuthContext';
 import * as Haptics from 'expo-haptics';
 
-export default function BookingChatModal({ isVisible, onClose, booking, session }) {
+export default function BookingChatModal({ isVisible, onClose, booking, session, connection }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const { user } = useAuth();
@@ -22,13 +23,13 @@ export default function BookingChatModal({ isVisible, onClose, booking, session 
   const [isSending, setIsSending] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
 
-  // Role-based names
+  // Role-based names - Support both Booking and Connection
   const isUserAdvisor = user?.role === 'Advisor' || user?.role === 2;
-  const chatPartnerName = isUserAdvisor ? booking?.customerName : booking?.advisorName;
+  const chatPartnerName = connection?.investorName || (isUserAdvisor ? booking?.customerName : booking?.advisorName);
   const chatPartnerAvatar = (chatPartnerName || 'C').charAt(0);
 
   const flatListRef = useRef(null);
-  const sessionId = session?.chatSessionId || session?.id || booking?.chatSessionId;
+  const sessionId = session?.chatSessionId || session?.id || booking?.chatSessionId || connection?.chatSessionId;
 
   useEffect(() => {
     if (isVisible && sessionId) {

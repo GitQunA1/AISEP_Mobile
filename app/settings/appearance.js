@@ -13,7 +13,7 @@ export default function AppearanceSettingsScreen() {
   const colors = activeTheme.colors;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <Stack.Screen 
         options={{

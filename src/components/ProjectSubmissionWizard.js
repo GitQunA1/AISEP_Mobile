@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  ScrollView, ActivityIndicator, Alert, Animated, SafeAreaView, Image, Dimensions
+  ScrollView, ActivityIndicator, Alert, Animated, Image, Dimensions, Platform, StatusBar
 } from 'react-native';
 import { 
   ArrowRight, ArrowLeft, Check, AlertCircle, X, 
@@ -10,46 +10,31 @@ import {
   MapPin, Briefcase, DollarSign, TrendingUp, Info
 } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import projectSubmissionService from '../services/projectSubmissionService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import validationService from '../services/validationService';
+import enumService from '../services/enumService';
 import { useTheme } from '../context/ThemeContext';
-import Card from './Card';
-import Button from './Button';
+import DynamicInputField from './common/DynamicInputField';
 import FadeInView from './FadeInView';
+import Card from './Card';
+import projectSubmissionService from '../services/projectSubmissionService';
 
 const { width } = Dimensions.get('window');
-
-const STAGES = [
-  { id: 0, label: 'Ý tưởng' },
-  { id: 1, label: 'MVP' },
-  { id: 2, label: 'Tăng trưởng' }
-];
-
-const INDUSTRIES = [
-  { label: 'Fintech', value: 0 },
-  { label: 'Edtech', value: 1 },
-  { label: 'Healthtech', value: 2 },
-  { label: 'Agritech', value: 3 },
-  { label: 'E_Commerce', value: 4 },
-  { label: 'Logistics', value: 5 },
-  { label: 'Proptech', value: 6 },
-  { label: 'Cleantech', value: 7 },
-  { label: 'SaaS', value: 8 },
-  { label: 'AI_BigData', value: 9 },
-  { label: 'Web3_Crypto', value: 10 },
-  { label: 'Food_Beverage', value: 11 },
-  { label: 'Manufacturing', value: 12 },
-  { label: 'Media_Entertainment', value: 13 },
-  { label: 'Other', value: 14 },
-];
 
 export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, initialData }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
   
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 6;
   const [isLoading, setIsLoading] = useState(false);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState('');
   const [errors, setErrors] = useState({});
+  const [validationRules, setValidationRules] = useState(null);
+  const [industries, setIndustries] = useState([]);
+  const [stages, setStages] = useState([]);
 
   const [formData, setFormData] = useState({
     // Step 1: Basic
@@ -94,16 +79,59 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
     videoUrl: '',
   });
 
+  const fetchConfig = async () => {
+    try {
+      setIsConfigLoading(true);
+      setConfigError('');
+      const formKey = initialData ? 'project.update' : 'project.create';
+      const [rules, fetchedIndustries, fetchedStages] = await Promise.all([
+        validationService.getFormRules(formKey),
+        enumService.getEnumOptions('Industry'),
+        enumService.getEnumOptions('DevelopmentStage')
+      ]);
+      
+      if (!rules || Object.keys(rules).length === 0) {
+        throw new Error('Không thể tải dữ liệu cấu hình từ máy chủ.');
+      }
+      
+      setValidationRules(rules);
+      setIndustries(fetchedIndustries || []);
+      setStages(fetchedStages || []);
+    } catch (error) {
+      console.error('Error fetching config:', error);
+      setConfigError('Không thể tải cấu hình biểu mẫu. Vui lòng kiểm tra kết nối mạng và thử lại.');
+    } finally {
+      setIsConfigLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (initialData) {
+    fetchConfig();
+  }, [initialData]);
+
+  useEffect(() => {
+    if (initialData && !isConfigLoading) {
       const getStageNumericValue = (stage) => {
         if (stage === undefined || stage === null) return 0;
         const s = String(stage).toLowerCase();
+        const matched = stages.find(st => String(st.value) === s || st.label.toLowerCase() === s);
+        if (matched) return Number(matched.value);
         if (s === 'idea' || s === '0') return 0;
         if (s === 'mvp' || s === '1') return 1;
         if (s === 'growth' || s === '2') return 2;
         return 0;
       };
+
+      let industryVal = '';
+      if (initialData.industry) {
+        const indString = String(initialData.industry).toLowerCase();
+        const matched = industries.find(i => 
+          String(i.value) === indString || 
+          i.label.toLowerCase() === indString ||
+          i.label.toLowerCase().replace(/ /g, '_') === indString
+        );
+        industryVal = matched ? String(matched.value) : String(initialData.industry);
+      }
 
       let teamArray = [{ name: '', role: '' }];
       if (initialData.teamMembers && typeof initialData.teamMembers === 'string') {
@@ -119,9 +147,8 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         ...prev,
         projectName: initialData.projectName || initialData.name || '',
         shortDescription: initialData.shortDescription || '',
-        industry: initialData.industry?.toString() || '',
+        industry: industryVal,
         location: initialData.location || '',
-        teamSize: initialData.teamSize?.toString() || '',
         vision: initialData.vision || '',
         mission: initialData.mission || '',
         coreValues: initialData.coreValues || '',
@@ -149,7 +176,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         existingPitchDeck: initialData.pitchDeckUrl || initialData.fileUrl || null
       }));
     }
-  }, [initialData]);
+  }, [initialData, isConfigLoading, industries, stages]);
 
   const pickFile = async (type) => {
     try {
@@ -168,40 +195,43 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
   };
 
   const validateStep = () => {
-    const newErrors = {};
-    const isIdea = parseInt(formData.developmentStage) === 0;
-    const isMVP = parseInt(formData.developmentStage) === 1;
-    const isGrowth = parseInt(formData.developmentStage) === 2;
-
-    if (currentStep === 1) {
-      if (!formData.projectName.trim()) newErrors.projectName = 'Bắt buộc';
-      if (!formData.shortDescription.trim()) newErrors.shortDescription = 'Bắt buộc';
-      if (formData.industry === '') newErrors.industry = 'Vui lòng chọn lĩnh vực';
-    } else if (currentStep === 3) {
-      if (!formData.problemStatement.trim()) newErrors.problemStatement = 'Bắt buộc';
-      if (!formData.solutionDescription.trim()) newErrors.solutionDescription = 'Bắt buộc';
-      if (!formData.targetCustomers.trim()) newErrors.targetCustomers = 'Bắt buộc';
-      
-      if (!isIdea) { // MVP or Growth
-         if (!formData.uniqueValueProposition.trim()) newErrors.uniqueValueProposition = 'Bắt buộc';
+    if (!validationRules) {
+      const newErrors = {};
+      if (currentStep === 1) {
+        if (!formData.projectName.trim()) newErrors.projectName = 'Bắt buộc';
+        if (!formData.shortDescription.trim()) newErrors.shortDescription = 'Bắt buộc';
+        if (formData.industry === '') newErrors.industry = 'Vui lòng chọn lĩnh vực';
       }
-    } else if (currentStep === 4) {
-       if (!isIdea) {
-          if (!formData.businessModel.trim()) newErrors.businessModel = 'Bắt buộc';
-       }
-       if (isGrowth) {
-          if (!formData.revenue || parseInt(formData.revenue) <= 0) newErrors.revenue = 'Yêu cầu doanh thu (Growth)';
-          if (!formData.marketSize || parseInt(formData.marketSize) <= 0) newErrors.marketSize = 'Yêu cầu quy mô TT';
-       }
-    } else if (currentStep === 6) {
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    }
+
+    const stepFields = {
+      1: ['projectName', 'shortDescription', 'industry', 'location', 'teamSize'],
+      2: ['vision', 'mission', 'coreValues'],
+      3: ['problemStatement', 'solutionDescription', 'targetCustomers', 'uniqueValueProposition'],
+      4: ['businessModel', 'revenue', 'marketSize', 'competitors'],
+      5: ['developmentStage', 'roadmapText', 'fundingStatus'],
+      6: ['keySkills', 'teamExperience', 'website', 'facebook', 'linkedin', 'videoUrl']
+    };
+
+    const currentFields = stepFields[currentStep] || [];
+    const newErrors = {};
+
+    currentFields.forEach(name => {
+      const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+      const rule = validationRules[ruleKey];
+      if (rule) {
+        const error = validationService.validateField(formData[name], rule, formData.developmentStage);
+        if (error) newErrors[name] = error;
+      }
+    });
+
+    if (currentStep === 6) {
       const hasEmptyMembers = formData.teamMembers.some(m => !m.name.trim());
       if (hasEmptyMembers) newErrors.teamMembers = 'Nhập tên thành viên';
-      
-      if (isGrowth && !formData.teamExperience.trim()) {
-         newErrors.teamExperience = 'Yêu cầu kinh nghiệm đội ngũ (Growth)';
-      }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -301,33 +331,26 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
     }
   };
 
-  const renderInput = (label, name, placeholder, multiline = false, keyboardType = 'default') => (
-    <View style={styles.formGroup}>
-      <Text style={[styles.label, { color: colors.secondaryText }]}>{label}</Text>
-      <TextInput
-        style={[
-          styles.input, 
-          { 
-            backgroundColor: colors.mutedBackground, 
-            color: colors.text, 
-            borderColor: errors[name] ? colors.error : colors.border 
-          },
-          multiline && styles.textArea
-        ]}
-        placeholder={placeholder}
+  const renderInput = (label, name, placeholder, multiline = false, keyboardType = 'default') => {
+    const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+    return (
+      <DynamicInputField
+        name={name}
+        label={label}
         value={String(formData[name] || '')}
-        onChangeText={(text) => {
-          setFormData(prev => ({ ...prev, [name]: text }));
-          if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+        onChangeText={(field, text) => {
+          setFormData(prev => ({ ...prev, [field]: text }));
+          if (errors[field]) setErrors(prev => ({ ...prev, [field]: null }));
         }}
+        validationRule={validationRules?.[ruleKey]}
+        currentStage={formData.developmentStage}
+        placeholder={placeholder}
         multiline={multiline}
         numberOfLines={multiline ? 4 : 1}
-        placeholderTextColor={colors.secondaryText + '80'}
         keyboardType={keyboardType}
       />
-      {errors[name] && <Text style={[styles.errorText, { color: colors.error }]}>{errors[name]}</Text>}
-    </View>
-  );
+    );
+  };
 
   const renderImagePicker = (label, type) => {
     const file = formData[`${type}File`];
@@ -367,20 +390,20 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
             <View style={styles.formGroup}>
               <Text style={[styles.label, { color: colors.secondaryText }]}>Lĩnh vực *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.industryScroll}>
-                {INDUSTRIES.map(ind => (
+                {industries.map(ind => (
                   <TouchableOpacity 
                     key={ind.value}
                     style={[
                       styles.industryChip,
                       { borderColor: colors.border },
-                      formData.industry === ind.value.toString() && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }
+                      formData.industry === String(ind.value) && { borderColor: colors.primary, backgroundColor: colors.primary + '10' }
                     ]}
-                    onPress={() => setFormData(p => ({ ...p, industry: ind.value.toString() }))}
+                    onPress={() => setFormData(p => ({ ...p, industry: String(ind.value) }))}
                   >
                     <Text style={[
                       styles.industryText, 
                       { color: colors.secondaryText },
-                      formData.industry === ind.value.toString() && { color: colors.primary }
+                      formData.industry === String(ind.value) && { color: colors.primary }
                     ]}>{ind.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -388,10 +411,8 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
               {errors.industry && <Text style={[styles.errorText, { color: colors.error }]}>{errors.industry}</Text>}
             </View>
 
-            <View style={styles.row}>
-              {renderInput('Địa điểm', 'location', 'Thành phố...', false)}
-              <View style={{ width: 12 }} />
-              {renderInput('Số lượng TV', 'teamSize', '0', false, 'numeric')}
+            <View style={{ marginBottom: 12 }}>
+              {renderInput('Địa điểm', 'location', 'Thành phố, Tỉnh thành...', false)}
             </View>
             
             <View style={styles.row}>
@@ -436,20 +457,20 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
             <Text style={[styles.stepTitle, { color: colors.text }]}>5. Lộ trình & Tài liệu</Text>
             <Text style={[styles.label, { color: colors.secondaryText, marginTop: 8 }]}>Giai đoạn phát triển *</Text>
             <View style={styles.selectRow}>
-              {STAGES.map(s => (
+              {stages.map(s => (
                 <TouchableOpacity 
-                  key={s.id} 
+                  key={s.value} 
                   style={[
                     styles.selectBtn, 
                     { borderColor: colors.border },
-                    formData.developmentStage === s.id && { backgroundColor: colors.primary, borderColor: colors.primary }
+                    formData.developmentStage === Number(s.value) && { backgroundColor: colors.primary, borderColor: colors.primary }
                   ]}
-                  onPress={() => setFormData(prev => ({ ...prev, developmentStage: s.id }))}
+                  onPress={() => setFormData(prev => ({ ...prev, developmentStage: Number(s.value) }))}
                 >
                   <Text style={[
                     styles.selectText, 
                     { color: colors.secondaryText },
-                    formData.developmentStage === s.id && { color: '#fff' }
+                    formData.developmentStage === Number(s.value) && { color: '#fff' }
                   ]}>{s.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -485,16 +506,22 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
              {/* Team Members List */}
              <View style={styles.teamContainer}>
                 <View style={styles.labelRow}>
-                  <Text style={[styles.label, { color: colors.secondaryText }]}>Thành viên</Text>
-                  <TouchableOpacity 
-                    style={[styles.addBtn, { backgroundColor: colors.primary + '15' }]} 
-                    onPress={() => setFormData(prev => ({ 
-                      ...prev, 
-                      teamMembers: [...prev.teamMembers, { name: '', role: '' }] 
-                    }))}
-                  >
-                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>+ Thêm</Text>
-                  </TouchableOpacity>
+                  <Text style={[styles.label, { color: colors.text }]}>Thành viên đội <Text style={{ color: colors.error }}>*</Text></Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ marginRight: 12, fontSize: 13, color: colors.secondaryText, fontWeight: '600' }}>
+                      Tổng số: {formData.teamMembers.length}
+                    </Text>
+                    <TouchableOpacity 
+                      style={[styles.addBtn, { backgroundColor: colors.primary }]} 
+                      onPress={() => setFormData(prev => ({ 
+                        ...prev, 
+                        teamMembers: [...prev.teamMembers, { name: '', role: '' }] 
+                      }))}
+                    >
+                      <Plus size={14} color="#fff" />
+                      <Text style={styles.addBtnText}>Thêm</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {formData.teamMembers.map((member, idx) => (
                   <View key={idx} style={styles.memberRow}>
@@ -554,7 +581,13 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[
+      styles.container, 
+      { 
+        backgroundColor: colors.background, 
+        paddingTop: Platform.OS === 'ios' ? insets.top : (StatusBar.currentHeight || 0) + 10 
+      }
+    ]}>
       <View style={[styles.progressHeader, { borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
@@ -574,50 +607,80 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
       </View>
 
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {renderStepContent()}
+        {isConfigLoading ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={{ marginTop: 12, color: colors.secondaryText }}>Đang tải cấu hình biểu mẫu...</Text>
+          </View>
+        ) : configError ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <AlertCircle size={48} color={colors.error} style={{ marginBottom: 16 }} />
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Lỗi khởi tạo</Text>
+            <Text style={{ color: colors.secondaryText, textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+              {configError}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.submitBtn, { backgroundColor: colors.primary, paddingHorizontal: 32 }]} 
+              onPress={fetchConfig}
+            >
+              <Text style={styles.submitText}>Thử lại ngay</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          renderStepContent()
+        )}
         <View style={{ height: 140 }} />
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity 
-          style={[styles.navBtn, currentStep === 1 && styles.disabledBtn]} 
-          onPress={handleBack}
-          disabled={currentStep === 1 || isLoading}
-        >
-          <ArrowLeft size={20} color={currentStep === 1 ? colors.secondaryText + '40' : colors.text} />
-          <Text style={[styles.navText, { color: currentStep === 1 ? colors.secondaryText + '40' : colors.text }]}>Quay lại</Text>
-        </TouchableOpacity>
+      {!isConfigLoading && !configError && (
+        <View style={[
+          styles.footer, 
+          { 
+            borderTopColor: colors.border, 
+            backgroundColor: colors.background, 
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom + 4 : Math.max(insets.bottom, 20)
+          }
+        ]}>
+          <TouchableOpacity 
+            style={[styles.navBtn, currentStep === 1 && styles.disabledBtn]} 
+            onPress={handleBack}
+            disabled={currentStep === 1 || isLoading}
+          >
+            <ArrowLeft size={20} color={currentStep === 1 ? colors.secondaryText + '40' : colors.text} />
+            <Text style={[styles.navText, { color: currentStep === 1 ? colors.secondaryText + '40' : colors.text }]}>Quay lại</Text>
+          </TouchableOpacity>
 
-        {currentStep < totalSteps ? (
-          <TouchableOpacity 
-            style={[styles.nextBtn, { backgroundColor: colors.primary }]} 
-            onPress={handleNext}
-          >
-            <Text style={styles.nextText}>Tiếp theo</Text>
-            <ArrowRight size={20} color="#fff" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity 
-            style={[styles.submitBtn, { backgroundColor: colors.primary }]} 
-            onPress={handleSubmit} 
-            disabled={isLoading}
-          >
-            {isLoading ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <Text style={styles.submitText}>{initialData ? 'Lưu thay đổi' : 'Gửi hồ sơ'}</Text>
-                <Check size={20} color="#fff" />
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    </SafeAreaView>
+          {currentStep < totalSteps ? (
+            <TouchableOpacity 
+              style={[styles.nextBtn, { backgroundColor: colors.primary }]} 
+              onPress={handleNext}
+            >
+              <Text style={styles.nextText}>Tiếp theo</Text>
+              <ArrowRight size={20} color="#fff" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.submitBtn, { backgroundColor: colors.primary }]} 
+              onPress={handleSubmit} 
+              disabled={isLoading}
+            >
+              {isLoading ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Text style={styles.submitText}>{initialData ? 'Lưu thay đổi' : 'Gửi hồ sơ'}</Text>
+                  <Check size={20} color="#fff" />
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  progressHeader: { padding: 20, paddingTop: 16, borderBottomWidth: 1 },
+  progressHeader: { padding: 16, paddingTop: 4, borderBottomWidth: 1 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
   closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -626,7 +689,7 @@ const styles = StyleSheet.create({
   stepInfoBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   stepLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   stepPercent: { fontSize: 10, fontWeight: '900' },
-  scrollContent: { padding: 24 },
+  scrollContent: { padding: 20, paddingTop: 24 },
   stepTitle: { fontSize: 24, fontWeight: '900', marginBottom: 24, letterSpacing: -0.8 },
   formGroup: { marginBottom: 20 },
   label: { fontSize: 12, fontWeight: '800', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -661,8 +724,7 @@ const styles = StyleSheet.create({
   footer: { 
     flexDirection: 'row', 
     paddingHorizontal: 20, 
-    paddingVertical: 20, 
-    paddingBottom: 34, 
+    paddingVertical: 8, 
     borderTopWidth: 1, 
     alignItems: 'center',
     position: 'absolute',

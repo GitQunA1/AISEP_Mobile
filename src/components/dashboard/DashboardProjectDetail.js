@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, 
-  ActivityIndicator, Alert, SafeAreaView, RefreshControl, Dimensions,
+import {
+  View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity,
+  ActivityIndicator, Alert, RefreshControl, Dimensions,
   Animated, Image
 } from 'react-native';
-import { 
-  X, AlertCircle, FileText, TrendingUp, Users, Shield, 
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  X, AlertCircle, FileText, TrendingUp, Users, Shield,
   Target, Lightbulb, Briefcase, Zap, CheckCircle, ChevronRight, Upload, Send
 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import DocumentManager from './DocumentManager';
 import Button from '../Button';
@@ -16,6 +18,8 @@ import Card from '../Card';
 import projectSubmissionService from '../../services/projectSubmissionService';
 import advisorService from '../../services/advisorService';
 import AdvisorBookingModal from '../AdvisorBookingModal';
+import AIEvaluationModal from '../common/AIEvaluationModal';
+import QuotaGuardModal from '../common/QuotaGuardModal';
 
 const { width } = Dimensions.get('window');
 
@@ -50,6 +54,8 @@ const parseTeamMembers = (text) => {
 export default function DashboardProjectDetail({ visible, project, onClose, onRefresh, onEdit }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
+  const { isPremium, quota, refreshSubscription } = useSubscription();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -62,11 +68,13 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [assignedAdvisor, setAssignedAdvisor] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showAIResultModal, setShowAIResultModal] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
 
   const fetchFullDetails = async () => {
     if (!project?.id && !project?.projectId) return;
     const pid = project.id || project.projectId;
-    
+
     setIsLoading(true);
     try {
       // 1. Fetch documents (Required)
@@ -101,7 +109,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           console.log('Error fetching advisor:', advErr);
         }
       }
-      
+
     } catch (error) {
       // Only log severe errors like network failure or document fetch failure
       console.error('Error fetching project documents:', error);
@@ -129,8 +137,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
       'Sau khi nộp, bạn sẽ không thể chỉnh sửa thông tin cho đến khi có kết quả duyệt. Bạn chắc chắn chứ?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Nộp ngay', 
+        {
+          text: 'Nộp ngay',
           onPress: async () => {
             setIsSubmitting(true);
             try {
@@ -154,12 +162,35 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   };
 
   const handleAIEvaluation = async () => {
+    if (!isPremium) {
+      Alert.alert(
+        'Tính năng Premium',
+        'Bạn cần nâng cấp gói dịch vụ để thực hiện phân tích AI cho dự án này.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Nâng cấp ngay', onPress: () => { onClose(); router.push('/subscription/management'); } }
+        ]
+      );
+      return;
+    }
+    setShowQuotaModal(true);
+  };
+
+  const handleConfirmAIAnalysis = async () => {
+    setShowQuotaModal(false);
     setIsEvaluatingAI(true);
     try {
       const res = await projectSubmissionService.triggerAIAnalysis(project.id || project.projectId);
       if (res?.success || res?.isSuccess) {
         Alert.alert('Thành công', 'Đang tiến hành đánh giá AI. Kết quả sẽ được cập nhật sau vài giây.');
-        fetchFullDetails();
+        refreshSubscription();
+
+        // Wait a bit and fetch results
+        setTimeout(async () => {
+          await fetchFullDetails();
+          // If we have new results, show them
+          if (aiAnalysis) setShowAIResultModal(true);
+        }, 2000);
       } else {
         Alert.alert('Lỗi', res?.message || 'Không thể kích hoạt đánh giá AI');
       }
@@ -223,15 +254,17 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   const statusConfig = getStatusConfig(fullData.status, colors);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerInfo}>
-            <Text style={[styles.projectTitle, { color: colors.text }]} numberOfLines={1}>
-              {fullData.projectName || fullData.name}
-            </Text>
-            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-              <Text style={[styles.statusLabel, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text allowFontScaling={false} style={[styles.projectTitle, { color: colors.text }]} numberOfLines={1}>
+                {fullData.projectName || fullData.name}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+                <Text allowFontScaling={false} style={[styles.statusLabel, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+              </View>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: colors.mutedBackground }]}>
@@ -239,8 +272,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          style={styles.content} 
+        <ScrollView
+          style={styles.content}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
         >
@@ -259,8 +292,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           {/* Hero Section if image exists */}
           {fullData.projectImageUrl && (
             <View style={styles.heroContainer}>
-              <Image 
-                source={{ uri: fullData.projectImageUrl }} 
+              <Image
+                source={{ uri: fullData.projectImageUrl }}
                 style={styles.heroImage}
                 resizeMode="cover"
               />
@@ -282,7 +315,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600' }}>Cung cấp bởi AISEP AI</Text>
               </View>
               {fullData.status === 'Draft' && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={handleAIEvaluation}
                   disabled={isEvaluatingAI}
                   style={[styles.smallActionBtn, { backgroundColor: colors.primary }]}
@@ -291,27 +324,36 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 </TouchableOpacity>
               )}
             </View>
-            <Card style={[styles.sectionCard, { padding: 16, backgroundColor: colors.primary + '05', borderColor: colors.primary + '20' }]}>
-              {aiAnalysis ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                  <View style={styles.scoreCircle}>
-                    <Text style={[styles.scoreValue, { color: colors.primary }]}>{aiAnalysis.potentialScore || aiAnalysis.score}</Text>
-                    <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                if (aiAnalysis) {
+                  setShowAIResultModal(true);
+                }
+              }}
+            >
+              <Card style={[styles.sectionCard, { padding: 16, backgroundColor: activeTheme.isDark ? 'rgba(255,255,255,0.05)' : colors.card, borderColor: activeTheme.isDark ? colors.primary + '20' : colors.border + '40' }]}>
+                {aiAnalysis ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                    <View style={[styles.scoreCircle, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+                      <Text style={[styles.scoreValue, { color: colors.primary }]}>{aiAnalysis.potentialScore || aiAnalysis.score}</Text>
+                      <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.aiSummaryTitle, { color: colors.text }]}>Dự án có tiềm năng cao</Text>
+                      <Text style={[styles.aiSummaryText, { color: colors.secondaryText }]} numberOfLines={2}>
+                        Bản phân tích gần nhất: {new Date(aiAnalysis.createdAt || Date.now()).toLocaleDateString('vi-VN')}
+                      </Text>
+                    </View>
+                    <ChevronRight size={20} color={colors.border} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.aiSummaryTitle, { color: colors.text }]}>Dự án có tiềm năng cao</Text>
-                    <Text style={[styles.aiSummaryText, { color: colors.secondaryText }]} numberOfLines={2}>
-                      Bản phân tích gần nhất: {new Date(aiAnalysis.createdAt || Date.now()).toLocaleDateString('vi-VN')}
-                    </Text>
-                  </View>
-                  <ChevronRight size={20} color={colors.border} />
-                </View>
-              ) : (
-                <Text style={{ color: colors.secondaryText, fontSize: 13, fontStyle: 'italic', textAlign: 'center' }}>
-                  Dự án này chưa có bản phân tích tiềm năng nào.
-                </Text>
-              )}
-            </Card>
+                ) : (
+                  <Text style={{ color: colors.secondaryText, fontSize: 13, fontStyle: 'italic', textAlign: 'center' }}>
+                    Dự án này chưa có bản phân tích tiềm năng nào.
+                  </Text>
+                )}
+              </Card>
+            </TouchableOpacity>
           </View>
 
           {/* Assigned Advisor Section */}
@@ -325,7 +367,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600' }}>Hỗ trợ chuyên môn trực tiếp</Text>
               </View>
               {fullData.status === 'Draft' && assignedAdvisor && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowBookingModal(true)}
                   style={[styles.smallActionBtn, { backgroundColor: '#10b981' }]}
                 >
@@ -333,7 +375,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 </TouchableOpacity>
               )}
             </View>
-            <Card style={[styles.sectionCard, { padding: 16 }]}>
+            <Card style={[styles.sectionCard, { padding: 16, backgroundColor: activeTheme.isDark ? 'rgba(255,255,255,0.05)' : colors.card, borderColor: activeTheme.isDark ? colors.primary + '20' : colors.border + '40' }]}>
               {assignedAdvisor ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={[styles.miniAvatar, { backgroundColor: colors.primary }]}>
@@ -362,12 +404,12 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               </View>
               <Card style={[styles.sectionCard, { borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: section.accent }]}>
                 {section.fields.map((field, fidx) => field.value ? (
-                  <View key={fidx} style={[styles.field, fidx === section.fields.length - 1 && styles.noBorder]}>
+                  <View key={fidx} style={[styles.field, fidx === section.fields.length - 1 && styles.noBorder, { borderBottomColor: colors.border + '30' }]}>
                     <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>{field.label}</Text>
                     {field.isTeam ? (
                       <View style={styles.teamGrid}>
                         {parseTeamMembers(field.value).map((member, idx) => (
-                          <View key={idx} style={[styles.teamMemberCard, { backgroundColor: colors.background }]}>
+                          <View key={idx} style={[styles.teamMemberCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
                             <View style={[styles.teamMemberAvatar, { backgroundColor: colors.accentPurple + '20' }]}>
                               <Users size={16} color={colors.accentPurple} />
                             </View>
@@ -402,10 +444,10 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Hình ảnh dự án</Text>
               </View>
               <Card style={[styles.sectionCard, { padding: 0, overflow: 'hidden', height: 200 }]}>
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                    <FileText size={40} color={colors.secondaryText} opacity={0.3} />
-                    <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Chưa có hình ảnh mô tả</Text>
-                  </View>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                  <FileText size={40} color={colors.secondaryText} opacity={0.3} />
+                  <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Chưa có hình ảnh mô tả</Text>
+                </View>
               </Card>
             </View>
           )}
@@ -418,10 +460,10 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               </View>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>5. Tài liệu & Blockchain</Text>
             </View>
-            <DocumentManager 
-               project={fullData} 
-               initialDocuments={documents} 
-               onRefresh={fetchFullDetails} 
+            <DocumentManager
+              project={fullData}
+              initialDocuments={documents}
+              onRefresh={fetchFullDetails}
             />
           </View>
 
@@ -429,33 +471,44 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
         </ScrollView>
 
         {/* Footer Actions */}
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <View style={[
+          styles.footer,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom || 12
+          }
+        ]}>
           {fullData.status === 'Draft' && (
-             <Button 
-               title="Nộp dự án" 
-               onPress={handleSubmitProject} 
-               loading={isSubmitting}
-               style={styles.footerBtn}
-               icon={<Send size={18} color="#fff" />}
-             />
+            <>
+              <Button
+                title={isSubmitting ? "Đang nộp..." : "Nộp dự án"}
+                onPress={handleSubmitProject}
+                loading={isSubmitting}
+                style={styles.footerBtn}
+              />
+              <View style={{ width: 12 }} />
+              <Button
+                title="Chỉnh sửa"
+                variant="outline"
+                onPress={() => { onClose(); onEdit?.(fullData); }}
+                style={styles.footerBtn}
+              />
+            </>
           )}
-          {(fullData.status === 'Draft' || fullData.status === 'Rejected') && (
-            <Button 
-              title="Chỉnh sửa" 
-              secondary
-              onPress={() => {
-                onClose();
-                onEdit(fullData);
-              }}
-              style={[styles.footerBtn, { marginLeft: fullData.status === 'Draft' ? 12 : 0 }]}
+          {fullData.status === 'Rejected' && (
+            <Button
+              title="Chỉnh sửa lại dự án"
+              onPress={() => { onClose(); onEdit?.(fullData); }}
+              style={styles.footerBtn}
             />
           )}
           {fullData.status !== 'Draft' && fullData.status !== 'Rejected' && (
-            <Button 
-              title="Đóng chi tiết" 
-              secondary 
-              onPress={onClose} 
-              style={styles.footerBtn} 
+            <Button
+              title="Đóng chi tiết"
+              variant="secondary"
+              onPress={onClose}
+              style={styles.footerBtn}
             />
           )}
         </View>
@@ -470,26 +523,43 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           setShowBookingModal(false);
         }}
       />
+
+      <QuotaGuardModal
+        visible={showQuotaModal}
+        onClose={() => setShowQuotaModal(false)}
+        onConfirm={handleConfirmAIAnalysis}
+        type="ai"
+        projectName={fullData.projectName || fullData.name}
+        isProcessing={isEvaluatingAI}
+        remaining={quota.remainingAiRequests}
+        packageName={quota.packageName}
+      />
+
+      <AIEvaluationModal
+        visible={showAIResultModal}
+        onClose={() => setShowAIResultModal(false)}
+        data={aiAnalysis}
+        projectName={fullData.projectName || fullData.name}
+      />
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingTop: 24,
-    paddingBottom: 16,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  headerInfo: { flex: 1, gap: 8 },
-  projectTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  statusLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
-  closeBtn: { padding: 8, borderRadius: 24, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerInfo: { flex: 1 },
+  projectTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, maxWidth: '65%' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  statusLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
+  closeBtn: { padding: 8, borderRadius: 20, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
   rejectionCard: { margin: 20, padding: 16, marginBottom: 8, borderWidth: 1, backgroundColor: '#fef2f220', borderRadius: 16 },
   rejectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
@@ -499,8 +569,8 @@ const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   iconContainer: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  sectionCard: { padding: 0, overflow: 'hidden', borderRadius: 24, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)' },
-  field: { padding: 18, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  sectionCard: { padding: 0, overflow: 'hidden', borderRadius: 24, borderWidth: 1, backgroundColor: 'transparent' },
+  field: { padding: 18, borderBottomWidth: 1 },
   noBorder: { borderBottomWidth: 0 },
   fieldLabel: { fontSize: 11, fontWeight: '800', color: '#71767b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 },
   fieldValueRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 },
@@ -511,8 +581,18 @@ const styles = StyleSheet.create({
   teamMemberInfo: { flex: 1 },
   teamMemberName: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
   teamMemberRole: { fontSize: 12, fontWeight: '500' },
-  footer: { flexDirection: 'row', padding: 16, backgroundColor: 'transparent', gap: 12 },
-  footerBtn: { flex: 1, height: 54, borderRadius: 16 },
+  footer: {
+    flexDirection: 'row',
+    padding: 12,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  footerBtn: { flex: 1, height: 50, borderRadius: 14 },
   heroContainer: { height: 240, width: '100%', position: 'relative', marginBottom: 24 },
   heroImage: { width: '100%', height: '100%' },
   heroOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingTop: 40 },
@@ -521,7 +601,14 @@ const styles = StyleSheet.create({
   heroStatus: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   smallActionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   smallActionBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  scoreCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 4, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+  scoreCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+  },
   scoreValue: { fontSize: 22, fontWeight: '900' },
   scoreMax: { fontSize: 10, fontWeight: '700', marginTop: -2 },
   aiSummaryTitle: { fontSize: 15, fontWeight: '800', marginBottom: 4 },

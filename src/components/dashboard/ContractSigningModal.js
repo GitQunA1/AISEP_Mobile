@@ -1,40 +1,36 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  ActivityIndicator, ScrollView, Dimensions, Alert 
+  ActivityIndicator, Dimensions, Alert 
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import SignatureCanvas from 'react-native-signature-canvas';
-import { X, Check, RotateCcw, FileText, ChevronRight, PenTool } from 'lucide-react-native';
+import { X, Check, FileText, ChevronRight, ShieldCheck, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import dealsService from '../../services/dealsService';
 
 const { width, height } = Dimensions.get('window');
 
 /**
- * ContractSigningModal - Modal for viewing and signing investment contracts
- * Features: HTML Preview, E-Signature Pad, Submission
+ * ContractSigningModal - Modal for viewing and confirming investment contracts
+ * Updated for New Flow: No physical signature, only digital confirmation
  */
 export default function ContractSigningModal({ visible, deal, onClose, onShowSuccess }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   
-  const [step, setStep] = useState(1); // 1: Preview, 2: Sign
   const [isLoading, setIsLoading] = useState(false);
   const [contractHtml, setContractHtml] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSignatureEmpty, setIsSignatureEmpty] = useState(true);
-  
-  const signatureRef = useRef();
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectInput, setShowRejectInput] = useState(false);
 
   useEffect(() => {
     if (visible && deal) {
       fetchContractPreview();
     } else {
-      // Reset state when closing
-      setStep(1);
       setContractHtml(null);
-      setIsSignatureEmpty(true);
+      setShowRejectInput(false);
+      setRejectReason('');
     }
   }, [visible, deal]);
 
@@ -55,45 +51,50 @@ export default function ContractSigningModal({ visible, deal, onClose, onShowSuc
     }
   };
 
-  const handleOK = (signature) => {
-    // Signature is base64 string
-    submitSignature(signature);
-  };
-
-  const submitSignature = async (signatureBase64) => {
+  const handleConfirm = async () => {
     setIsSubmitting(true);
     try {
-      // For mobile, we strip the prefix if it exists in the data returned by signature-canvas
-      const cleanBase64 = signatureBase64.replace('data:image/png;base64,', '');
-      
-      const response = await dealsService.signContractStartup(deal.dealId, {
-        signatureBase64: cleanBase64
-      });
+      // New Flow: Calling verifyDeal(id, true, '') instead of signContractStartup
+      const response = await dealsService.verifyDeal(deal.dealId, true, '');
 
       if (response && (response.success || response.data)) {
-        onShowSuccess('✓ Hợp đồng đã được ký kết thành công!');
+        onShowSuccess('✓ Hợp đồng đã được xác nhận thành công!');
         onClose();
       } else {
-        Alert.alert('Lỗi', response?.message || 'Không thể ký hợp đồng');
+        Alert.alert('Lỗi', response?.message || 'Không thể xác nhận hợp đồng');
       }
     } catch (error) {
-      console.error('[ContractSigningModal] Submission error:', error);
-      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi gửi chữ ký.');
+      console.error('[ContractSigningModal] Confirmation error:', error);
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi xác nhận hợp đồng.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleClear = () => {
-    signatureRef.current.clearSignature();
-    setIsSignatureEmpty(true);
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      Alert.alert('Thông báo', 'Vui lòng nhập lý do từ chối.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await dealsService.verifyDeal(deal.dealId, false, rejectReason);
+      if (response && (response.success || response.data)) {
+        onShowSuccess('✓ Thỏa thuận đã bị từ chối.');
+        onClose();
+      } else {
+        Alert.alert('Lỗi', 'Không thể từ chối thỏa thuận.');
+      }
+    } catch (error) {
+      console.error('[ContractSigningModal] Rejection error:', error);
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi gửi yêu cầu.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleEnd = () => {
-    setIsSignatureEmpty(false);
-  };
-
-  const isAlreadySigned = deal?.status === 'Contract_Signed' || deal?.status === 3 || deal?.status === 'Minted_NFT' || deal?.status === 4;
+  const isAlreadySigned = deal?.statusStr === 'CONTRACT_SIGNED' || deal?.statusStr === 'MINTED_NFT' || deal?.status === 3 || deal?.status === 4;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
@@ -104,98 +105,82 @@ export default function ContractSigningModal({ visible, deal, onClose, onShowSuc
             <X size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.text }]}>
-            {step === 1 ? 'Xem hợp đồng' : 'Ký tên xác nhận'}
+            Xác nhận thỏa thuận
           </Text>
           <View style={{ width: 40 }} />
         </View>
 
         {/* Content */}
         <View style={styles.content}>
-          {step === 1 ? (
-            /* Step 1: Preview HTML */
-            <View style={styles.previewContainer}>
-              {isLoading ? (
-                <View style={styles.centered}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={{ marginTop: 12, color: colors.secondaryText }}>Đang tải hợp đồng...</Text>
-                </View>
-              ) : (
-                <>
+          <View style={styles.previewContainer}>
+            {isLoading ? (
+              <View style={styles.centered}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ marginTop: 12, color: colors.secondaryText }}>Đang tải hợp đồng...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={[styles.webviewWrapper, { borderColor: colors.border }]}>
                   <WebView
                     originWhitelist={['*']}
-                    source={{ html: contractHtml || '<html><body><p>Không có nội dung</p></body></html>' }}
-                    style={[styles.webview, { backgroundColor: 'white' }]}
+                    source={{ html: contractHtml || '<html><body style="font-family: sans-serif; padding: 20px;"><h2>Bản thảo thỏa thuận đầu tư</h2><p>Đang chuẩn bị nội dung...</p></body></html>' }}
+                    style={styles.webview}
                   />
-                  {!isAlreadySigned && (
+                </View>
+
+                {!isAlreadySigned && (
+                  <View style={styles.footer}>
                     <TouchableOpacity 
-                      style={[styles.footerBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => setStep(2)}
+                      style={[styles.actionBtn, styles.confirmBtn, { backgroundColor: colors.primary }]}
+                      onPress={handleConfirm}
+                      disabled={isSubmitting}
                     >
-                      <PenTool size={18} color="#fff" />
-                      <Text style={styles.footerBtnText}>Tiếp tục ký tên</Text>
-                      <ChevronRight size={18} color="#fff" />
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <>
+                          <Check size={20} color="#fff" />
+                          <Text style={styles.btnText}>Xác nhận & Chấp thuận</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
-                  )}
-                </>
-              )}
-            </View>
-          ) : (
-            /* Step 2: Signature Canvas */
-            <View style={styles.signatureContainer}>
-              <View style={styles.signHeader}>
-                <Text style={[styles.signInstructions, { color: colors.secondaryText }]}>
-                  Vui lòng ký tên vào khung bên dưới để xác nhận thỏa thuận đầu tư.
-                </Text>
-              </View>
 
-              <View style={[styles.canvasWrapper, { borderColor: colors.border }]}>
-                <SignatureCanvas
-                  ref={signatureRef}
-                  onEnd={handleEnd}
-                  onOK={handleOK}
-                  descriptionText="Ký tên tại đây"
-                  clearText="Xóa"
-                  confirmText="Xác nhận"
-                  webStyle={`.m-signature-pad--footer { display: none; } body,html { width: 100%; height: 100%; }`}
-                  autoClear={false}
-                  imageType="image/png"
-                />
-              </View>
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, styles.rejectBtn, { borderColor: colors.error }]}
+                      onPress={() => {
+                        Alert.prompt(
+                          "Từ chối thỏa thuận",
+                          "Vui lòng nhập lý do từ chối:",
+                          [
+                            { text: "Hủy", style: "cancel" },
+                            { 
+                              text: "Gửi", 
+                              onPress: (reason) => {
+                                setRejectReason(reason);
+                                handleReject();
+                              },
+                              style: "destructive"
+                            }
+                          ]
+                        );
+                      }}
+                      disabled={isSubmitting}
+                    >
+                      <X size={18} color={colors.error} />
+                      <Text style={[styles.btnText, { color: colors.error }]}>Từ chối</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
-              <View style={styles.signActions}>
-                <TouchableOpacity 
-                  style={[styles.smallBtn, { backgroundColor: colors.mutedBackground }]}
-                  onPress={handleClear}
-                >
-                  <RotateCcw size={16} color={colors.text} />
-                  <Text style={[styles.smallBtnText, { color: colors.text }]}>Ký lại</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[
-                    styles.submitBtn, 
-                    { backgroundColor: colors.accentGreen },
-                    (isSignatureEmpty || isSubmitting) && { opacity: 0.5 }
-                  ]}
-                  onPress={() => signatureRef.current.readSignature()}
-                  disabled={isSignatureEmpty || isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Check size={20} color="#fff" />
-                      <Text style={styles.submitBtnText}>Hoàn tất ký kết</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-              
-              <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>Quay lại xem hợp đồng</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                {isAlreadySigned && (
+                  <View style={styles.signedStatus}>
+                    <ShieldCheck size={20} color={colors.success} />
+                    <Text style={[styles.signedText, { color: colors.success }]}>Thỏa thuận này đã được xác nhận</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -208,93 +193,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 60,
+    paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
   },
-  closeBtn: {
-    padding: 8,
-    borderRadius: 20,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  closeBtn: { padding: 8 },
+  title: { fontSize: 18, fontWeight: '800' },
   content: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  previewContainer: { flex: 1, padding: 0 },
-  webview: { flex: 1 },
-  footerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 10,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  footerBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  signatureContainer: {
+  previewContainer: { flex: 1, padding: 20 },
+  webviewWrapper: {
     flex: 1,
-    padding: 20,
-  },
-  signHeader: {
-    marginBottom: 24,
-  },
-  signInstructions: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  canvasWrapper: {
-    width: '100%',
-    height: height * 0.4,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    marginBottom: 20,
   },
-  signActions: {
-    flexDirection: 'row',
-    gap: 15,
-    marginTop: 24,
-  },
-  smallBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  smallBtnText: {
-    fontWeight: '700',
-  },
-  submitBtn: {
-    flex: 1,
+  webview: { flex: 1 },
+  footer: { gap: 12, marginBottom: 20 },
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    height: 56,
+    borderRadius: 16,
     gap: 10,
-    borderRadius: 12,
   },
-  submitBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  backBtn: {
-    marginTop: 30,
+  confirmBtn: { elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
+  rejectBtn: { borderWidth: 1.5 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  signedStatus: {
+    flexDirection: 'row',
     alignItems: 'center',
-  }
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#10b98110',
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  signedText: { fontSize: 14, fontWeight: '700' },
 });

@@ -41,9 +41,11 @@ const userReportService = {
    * Resolve report as valid
    * PATCH /api/UserReports/${reportId}/resolve-valid
    */
-  resolveValid: async (reportId) => {
+  resolveValid: async (reportId, note = "") => {
     try {
-      const response = await apiClient.patch(`/api/UserReports/${reportId}/resolve-valid`);
+      const response = await apiClient.patch(`/api/UserReports/${reportId}/resolve-valid`, {
+        resolutionNote: note
+      });
       return response?.data ?? response;
     } catch (error) {
       console.error('[userReportService] resolveValid Error:', error);
@@ -55,13 +57,43 @@ const userReportService = {
    * Resolve report as false/invalid
    * PATCH /api/UserReports/${reportId}/resolve-false
    */
-  resolveFalse: async (reportId) => {
+  resolveFalse: async (reportId, note = "") => {
     try {
-      const response = await apiClient.patch(`/api/UserReports/${reportId}/resolve-false`);
+      const response = await apiClient.patch(`/api/UserReports/${reportId}/resolve-false`, {
+        resolutionNote: note
+      });
       return response?.data ?? response;
     } catch (error) {
       console.error('[userReportService] resolveFalse Error:', error);
       throw error;
+    }
+  },
+
+  /**
+   * Get reports created by current user (Reporter)
+   * GET /api/UserReports/me/reporter
+   */
+  getMyReportsAsReporter: async () => {
+    try {
+      const response = await apiClient.get('/api/UserReports/me/reporter');
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[userReportService] getMyReportsAsReporter Error:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Get reports filed against current user (Reported)
+   * GET /api/UserReports/me/reported
+   */
+  getMyReportsAsReported: async () => {
+    try {
+      const response = await apiClient.get('/api/UserReports/me/reported');
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[userReportService] getMyReportsAsReported Error:', error);
+      return [];
     }
   },
 };

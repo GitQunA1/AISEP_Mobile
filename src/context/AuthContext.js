@@ -1,8 +1,10 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import authService from '../services/authService';
 import signalRService from '../services/signalRService';
+import apiClient from '../services/apiClient';
 import { eventEmitter } from '../utils/eventEmitter';
 import SessionExpiredModal from '../components/auth/SessionExpiredModal';
 
@@ -20,13 +22,22 @@ export const AuthProvider = ({ children }) => {
         const storedUser = await AsyncStorage.getItem('aisep_user');
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          
+
           // Role check on initialization for security
-          const roleStr = typeof parsedUser.role === 'string' ? parsedUser.role.toLowerCase() : (parsedUser.role === 0 ? 'startup' : '');
+          let roleStr = '';
+          if (typeof parsedUser.role === 'string') {
+            roleStr = parsedUser.role.toLowerCase();
+          } else if (Array.isArray(parsedUser.role)) {
+            roleStr = parsedUser.role.map(r => String(r).toLowerCase()).includes('startup') ? 'startup' : '';
+          } else if (parsedUser.role === 0) {
+            roleStr = 'startup';
+          }
+
           if (roleStr !== 'startup') {
-            console.log('[AuthContext] Non-startup user detected on init, clearing session');
+            console.log('[AuthContext] Non-startup user detected on init, clearing session. Role:', parsedUser.role);
             await AsyncStorage.multiRemove(['aisep_user', 'aisep_token', 'aisep_refresh_token']);
             setUser(null);
+            Alert.alert("Thông báo", "Phiên đăng nhập cũ đã bị xóa. Vui lòng đăng nhập lại lần cuối.");
           } else {
             setUser(parsedUser);
             const token = await AsyncStorage.getItem('aisep_token');
@@ -69,8 +80,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      const api = require('../services/apiClient').default;
-      api.isManualLogout = true;
+      apiClient.isManualLogout = true;
       await authService.logout();
     } catch (e) {
       console.error('[AuthContext] Logout error', e);
@@ -82,11 +92,10 @@ export const AuthProvider = ({ children }) => {
       setIsSessionExpired(false);
       signalRService.disconnect();
       router.replace('/');
-      
+
       // Reset the flag after a small delay to allow background requests to settle
       setTimeout(() => {
-        const api = require('../services/apiClient').default;
-        api.isManualLogout = false;
+        apiClient.isManualLogout = false;
       }, 1000);
     }
   };
@@ -106,10 +115,10 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
-      <SessionExpiredModal 
-        visible={isSessionExpired} 
-        onLogin={handleModalLogin} 
-        onHome={handleModalHome} 
+      <SessionExpiredModal
+        visible={isSessionExpired}
+        onLogin={handleModalLogin}
+        onHome={handleModalHome}
       />
     </AuthContext.Provider>
   );

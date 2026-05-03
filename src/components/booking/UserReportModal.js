@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  ScrollView, TextInput, ActivityIndicator, SafeAreaView,
+  ScrollView, TextInput, ActivityIndicator,
   Alert, Dimensions, Image 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, AlertCircle, ShieldAlert, Send, 
-  Camera, Video, Trash2, Plus 
+  Camera, Video, Trash2, Plus, Info, ExternalLink
 } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../../context/ThemeContext';
 import userReportService from '../../services/userReportService';
 
@@ -25,12 +27,12 @@ const REPORT_CATEGORIES = [
 ];
 
 export default function UserReportModal({ 
-  isVisible, onClose, bookingId, targetUserId, targetUserName, onDone 
+  isVisible, onClose, bookingId, targetUserId, targetUserName, onDone, viewOnlyReport = null 
 }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
 
-  const [phase, setPhase] = useState('form'); // form | loading | success
+  const [phase, setPhase] = useState('form'); // form | loading | success | view
   const [form, setForm] = useState({
     category: 'PaymentDispute',
     description: '',
@@ -38,6 +40,22 @@ export default function UserReportModal({
   });
   const [evidenceFiles, setEvidenceFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) {
+      if (viewOnlyReport) {
+        setPhase('view');
+      } else {
+        setPhase('form');
+        setForm({
+          category: 'PaymentDispute',
+          description: '',
+          videoEvidenceUrl: '',
+        });
+        setEvidenceFiles([]);
+      }
+    }
+  }, [isVisible, viewOnlyReport]);
 
   const handlePickEvidence = async () => {
     if (evidenceFiles.length >= 5) {
@@ -99,6 +117,12 @@ export default function UserReportModal({
     }
   };
 
+  const getCategoryLabel = (val) => REPORT_CATEGORIES.find(c => c.value === val)?.label || val;
+
+  const handleOpenLink = (url) => {
+    if (url) Linking.openURL(url);
+  };
+
   return (
     <Modal
       visible={isVisible}
@@ -110,11 +134,13 @@ export default function UserReportModal({
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerTitleGrp}>
-            <ShieldAlert size={24} color={colors.error} />
+            <ShieldAlert size={24} color={viewOnlyReport ? colors.primary : colors.error} />
             <View>
-              <Text style={[styles.headerTitleText, { color: colors.text }]}>Khiếu Nại / Báo Cáo</Text>
+              <Text style={[styles.headerTitleText, { color: colors.text }]}>
+                {viewOnlyReport ? 'Chi Tiết Khiếu Nại' : 'Khiếu Nại / Báo Cáo'}
+              </Text>
               <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
-                {targetUserName ? `Về: ${targetUserName}` : bookingId ? `Booking #${bookingId}` : 'Báo cáo hệ thống'}
+                {viewOnlyReport ? `Mã: #${viewOnlyReport.userReportId}` : (targetUserName ? `Về: ${targetUserName}` : bookingId ? `Booking #${bookingId}` : 'Báo cáo hệ thống')}
               </Text>
             </View>
           </View>
@@ -226,12 +252,82 @@ export default function UserReportModal({
           </ScrollView>
         )}
 
-        {phase === 'form' && (
+        {phase === 'view' && viewOnlyReport && (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={[styles.statusBox, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
+               <Info size={20} color={colors.primary} />
+               <View style={{ flex: 1 }}>
+                  <Text style={[styles.statusBoxTitle, { color: colors.primary }]}>Trạng thái: {viewOnlyReport.status || 'Đang xử lý'}</Text>
+                  <Text style={[styles.statusBoxDesc, { color: colors.secondaryText }]}>Gửi ngày: {new Date(viewOnlyReport.createdDate).toLocaleDateString('vi-VN')}</Text>
+               </View>
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.secondaryText }]}>Loại vi phạm</Text>
+              <Text style={[styles.viewValue, { color: colors.text }]}>{getCategoryLabel(viewOnlyReport.category)}</Text>
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: colors.secondaryText }]}>Mô tả của bạn</Text>
+              <View style={[styles.noteBox, { backgroundColor: colors.mutedBackground }]}>
+                <Text style={[styles.noteText, { color: colors.text }]}>{viewOnlyReport.description}</Text>
+              </View>
+            </View>
+
+            {viewOnlyReport.evidenceImages && viewOnlyReport.evidenceImages.length > 0 && (
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: colors.secondaryText }]}>Bằng chứng hình ảnh</Text>
+                <View style={styles.evidenceGrid}>
+                  {viewOnlyReport.evidenceImages.map((img, idx) => (
+                    <TouchableOpacity key={idx} style={[styles.evidenceItem, { borderColor: colors.border }]} onPress={() => handleOpenLink(img.imageUrl)}>
+                      <Image source={{ uri: img.imageUrl }} style={styles.evidenceImg} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {viewOnlyReport.videoEvidenceUrl && (
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: colors.secondaryText }]}>Link video minh chứng</Text>
+                <TouchableOpacity 
+                  style={[styles.inputWrapper, { borderColor: colors.primary + '40', backgroundColor: colors.primary + '05' }]}
+                  onPress={() => handleOpenLink(viewOnlyReport.videoEvidenceUrl)}
+                >
+                  <Video size={18} color={colors.primary} style={{ marginRight: 10 }} />
+                  <Text style={{ flex: 1, color: colors.primary, fontWeight: '600' }} numberOfLines={1}>
+                    {viewOnlyReport.videoEvidenceUrl}
+                  </Text>
+                  <ExternalLink size={16} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {viewOnlyReport.staffNote && (
+              <View style={[styles.field, { marginTop: 20 }]}>
+                <Text style={[styles.label, { color: colors.accentGreen }]}>Phản hồi từ Staff</Text>
+                <View style={[styles.noteBox, { backgroundColor: colors.accentGreen + '10', borderColor: colors.accentGreen, borderLeftWidth: 4 }]}>
+                  <Text style={[styles.noteText, { color: colors.text }]}>{viewOnlyReport.staffNote}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
+
+        {(phase === 'form' || phase === 'view') && (
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
-             <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.error }]} onPress={handleSubmit}>
-              <Send size={18} color="#fff" />
-              <Text style={styles.submitBtnText}>Gửi báo cáo ngay</Text>
-            </TouchableOpacity>
+            {phase === 'form' ? (
+              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.error }]} onPress={handleSubmit}>
+                <Send size={18} color="#fff" />
+                <Text style={styles.submitBtnText}>Gửi báo cáo ngay</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.primary }]} onPress={onClose}>
+                <Text style={styles.submitBtnText}>Đóng</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </SafeAreaView>
@@ -275,4 +371,10 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 12 },
   mutedText: { fontSize: 14, lineHeight: 22 },
   doneBtn: { paddingHorizontal: 40, paddingVertical: 14, borderRadius: 14, marginTop: 32 },
+  statusBox: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 14, borderWidth: 1, marginBottom: 24, alignItems: 'center' },
+  statusBoxTitle: { fontSize: 15, fontWeight: '800' },
+  statusBoxDesc: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  viewValue: { fontSize: 16, fontWeight: '600' },
+  noteBox: { padding: 16, borderRadius: 16, borderWidth: 0 },
+  noteText: { fontSize: 15, lineHeight: 24 },
 });

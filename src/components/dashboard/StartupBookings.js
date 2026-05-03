@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { 
   MessageSquare, FileText, CheckCircle, Clock, 
-  AlertCircle, CreditCard, ChevronRight, Calendar, RefreshCcw
+  AlertCircle, CreditCard, ChevronRight, Calendar, RefreshCcw, Crown, Sparkles, Star, Search, Briefcase
 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { useRouter } from 'expo-router';
 import Card from '../Card';
 import FadeInView from '../FadeInView';
 import bookingService from '../../services/bookingService';
@@ -18,35 +20,46 @@ import BookingDetailModal from '../booking/BookingDetailModal';
 import BookingChatModal from '../booking/BookingChatModal';
 import ConsultingReportModal from '../booking/ConsultingReportModal';
 import UserReportModal from '../booking/UserReportModal';
+import ReviewModal from '../booking/ReviewModal';
 
 const BOOKING_STATUS_LABELS = {
-  0: { label: 'Chờ xác nhận', color: '#f59e0b' }, // Pending
+  0: { label: 'Chờ xác nhận', color: '#f59e0b' },
   'Pending': { label: 'Chờ xác nhận', color: '#f59e0b' },
-  1: { label: 'Chờ thanh toán', color: '#1d9bf0' }, // ApprovedAwaitingPayment
+  1: { label: 'Chờ thanh toán', color: '#1d9bf0' },
   'ApprovedAwaitingPayment': { label: 'Chờ thanh toán', color: '#1d9bf0' },
-  2: { label: 'Đã xác nhận', color: '#1d9bf0' }, // Confirmed
+  2: { label: 'Đã xác nhận', color: '#1d9bf0' },
   'Confirmed': { label: 'Đã xác nhận', color: '#1d9bf0' },
-  3: { label: 'Hoàn thành', color: '#17bf63' }, // Completed
+  3: { label: 'Hoàn thành', color: '#17bf63' },
   'Completed': { label: 'Hoàn thành', color: '#17bf63' },
-  4: { label: 'Đã hủy', color: '#f4212e' }, // Cancel
+  4: { label: 'Khiếu nại chấp nhận', color: '#17bf63' },
+  'ComplaintAccepted': { label: 'Khiếu nại chấp nhận', color: '#17bf63' },
+  5: { label: 'Khiếu nại từ chối', color: '#f4212e' },
+  'ComplaintRejected': { label: 'Khiếu nại từ chối', color: '#f4212e' },
+  6: { label: 'Đã hủy', color: '#f4212e' },
   'Cancel': { label: 'Đã hủy', color: '#f4212e' },
-  5: { label: 'Không phản hồi', color: '#f4212e' }, // NoResponse
+  7: { label: 'Không phản hồi', color: '#f4212e' },
   'NoResponse': { label: 'Không phản hồi', color: '#f4212e' },
+  8: { label: 'Quá hạn báo cáo', color: '#f4212e' },
+  'ConsultingReportOverdue': { label: 'Quá hạn báo cáo', color: '#f4212e' },
+  9: { label: 'Đang khiếu nại', color: '#1d9bf0' },
+  'ComplaintPending': { label: 'Đang khiếu nại', color: '#1d9bf0' },
 };
 
 const FILTER_TABS = [
   { id: 'All', label: 'Tất cả' },
   { id: 'ApprovedAwaitingPayment', label: 'Chờ thanh toán' },
   { id: 'Pending', label: 'Chờ duyệt' },
-  { id: 'Confirmed', label: 'Đã xác nhận' },
+  { id: 'Confirmed', label: 'Đang tư vấn' },
   { id: 'Completed', label: 'Hoàn thành' },
-  { id: 'NoResponse', label: 'Không phản hồi' },
-  { id: 'Cancel', label: 'Đã hủy' }
+  { id: 'ComplaintPending', label: 'Đang khiếu nại' },
+  { id: 'Failed', label: 'Đã hủy/Quá hạn' }
 ];
 
 export default function StartupBookings({ user, onAction, refreshKey }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const router = useRouter();
+  const { quota, isPremium } = useSubscription();
   const { width: SCREEN_WIDTH } = Dimensions.get('window');
   const ITEM_GAP = 10;
   const HORIZONTAL_PADDING = 20;
@@ -60,17 +73,19 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
 
   // Modal States
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showComplaintModal, setShowComplaintModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [activeChatSession, setActiveChatSession] = useState(null);
+  const [viewOnlyComplaint, setViewOnlyComplaint] = useState(null);
 
   const loadBookings = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
+      // Sort by Id descending to get newest first as a baseline
       const response = await bookingService.getMyCustomerBookings('', '-Id', 1, 100);
       const items = response?.items ?? (Array.isArray(response) ? response : []);
       setBookings(items);
@@ -86,19 +101,8 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     loadBookings();
   }, [loadBookings, refreshKey]);
 
-  const handleChat = async (booking) => {
-    setChatLoadingId(booking.id || booking.bookingId);
-    try {
-      const result = await chatService.createOrGetBookingChat(booking.id || booking.bookingId);
-      setSelectedBooking(booking);
-      setActiveChatSession(result);
-      setShowChatModal(true);
-    } catch (error) {
-      console.error('[StartupBookings] Chat access failed:', error);
-      Alert.alert('Lỗi', 'Không thể khởi tạo phòng chat.');
-    } finally {
-      setChatLoadingId(null);
-    }
+  const handleChat = (booking) => {
+    onAction?.('chat', booking);
   };
 
   const handleAction = (type, item) => {
@@ -108,10 +112,20 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     if (type === 'report') setShowReportModal(true);
     if (type === 'complain') {
       setShowDetailModal(false);
-      // Small timeout to allow the detail modal to close before showing complaint
-      setTimeout(() => {
-        setShowComplaintModal(true);
-      }, 300);
+      setViewOnlyComplaint(null);
+      setTimeout(() => setShowComplaintModal(true), 300);
+    }
+    if (type === 'viewComplaint') {
+      setShowDetailModal(false);
+      setViewOnlyComplaint(item); // In this case 'item' is the report object
+      setTimeout(() => setShowComplaintModal(true), 300);
+    }
+    if (type === 'rate') {
+      setShowReviewModal(true);
+    }
+    if (type === 'viewProject') {
+      setShowDetailModal(false);
+      onAction?.('viewProject', item);
     }
     if (type === 'rebook') onAction?.('rebook', item);
     if (type === 'pay') onAction?.('pay', item);
@@ -122,8 +136,8 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     if (filterStatus === 'Pending') return b.status === 0 || b.status === 'Pending';
     if (filterStatus === 'Confirmed') return b.status === 2 || b.status === 'Confirmed';
     if (filterStatus === 'Completed') return b.status === 3 || b.status === 'Completed';
-    if (filterStatus === 'NoResponse') return b.status === 5 || b.status === 'NoResponse';
-    if (filterStatus === 'Cancel') return b.status === 4 || b.status === 'Cancel';
+    if (filterStatus === 'ComplaintPending') return b.status === 9 || b.status === 'ComplaintPending';
+    if (filterStatus === 'Failed') return [4, 5, 6, 7, 8].includes(b.status) || ['Cancel', 'NoResponse', 'ConsultingReportOverdue'].includes(b.status);
     return true;
   }).sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
 
@@ -132,6 +146,8 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     const startTime = new Date(item.startTime);
     const endTime = new Date(item.endTime);
     const isChatLoading = chatLoadingId === (item.id || item.bookingId);
+    
+    const isFree = item.isFreeRebookFromComplaint || item.IsFreeRebookFromComplaint || item.usedPremiumFreeQuota || item.UsedPremiumFreeQuota;
 
     return (
       <FadeInView>
@@ -143,7 +159,7 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
                   {(item.projectName || 'D').charAt(0).toUpperCase()}
                 </Text>
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[styles.projectName, { color: colors.text }]} numberOfLines={1}>
                   {item.projectName || 'Dự án'}
                 </Text>
@@ -172,6 +188,12 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
                 {startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
+            {isFree && (
+              <View style={styles.metaItem}>
+                <Sparkles size={14} color="#eab308" fill="#eab308" />
+                <Text style={[styles.metaText, { color: '#eab308', fontWeight: '800' }]}>Miễn phí</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.cardActions}>
@@ -185,7 +207,7 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
 
             {(item.status === 1 || item.status === 'ApprovedAwaitingPayment') && (
               <TouchableOpacity 
-                style={[styles.actionBtn, styles.primaryBtn, { backgroundColor: colors.accentCyan }]}
+                style={[styles.actionBtn, styles.primaryBtn, { backgroundColor: colors.accentGreen }]}
                 onPress={() => handleAction('pay', item)}
               >
                 <CreditCard size={14} color="#fff" />
@@ -210,7 +232,7 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
               </TouchableOpacity>
             )}
 
-            {(item.status === 2 || item.status === 'Confirmed' || item.status === 3 || item.status === 'Completed') && (
+            {(item.status === 3 || item.status === 'Completed') && (
               <TouchableOpacity 
                 style={[styles.actionBtn, { backgroundColor: colors.mutedBackground }]}
                 onPress={() => handleAction('report', item)}
@@ -219,70 +241,108 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
                 <Text style={[styles.actionBtnText, { color: colors.text }]}>Báo cáo</Text>
               </TouchableOpacity>
             )}
+
+            {item.status === 9 && (
+              <TouchableOpacity 
+                style={[styles.actionBtn, { backgroundColor: colors.primary + '15' }]}
+                onPress={() => handleAction('detail', item)}
+              >
+                <Search size={14} color={colors.primary} />
+                <Text style={[styles.actionBtnText, { color: colors.primary }]}>Khiếu nại</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </Card>
       </FadeInView>
     );
   };
 
+  const renderHeader = () => (
+    <View style={styles.statsContainer}>
+      <View style={styles.statsRow}>
+        <StatItem 
+          label="Tổng" 
+          value={bookings.length} 
+          color={colors.text} 
+          colors={colors} 
+          width={CARD_WIDTH} 
+        />
+        <StatItem 
+          label="Xong" 
+          value={bookings.filter(b => b.status === 3 || b.status === 'Completed').length} 
+          color={colors.accentGreen} 
+          colors={colors} 
+          width={CARD_WIDTH} 
+        />
+        <StatItem 
+          label="Duyệt" 
+          value={bookings.filter(b => b.status === 2 || b.status === 'Confirmed').length} 
+          color={colors.accentCyan} 
+          colors={colors} 
+          width={CARD_WIDTH} 
+        />
+        <StatItem 
+          label="Hủy" 
+          value={bookings.filter(b => [4, 5, 6, 7, 8].includes(b.status)).length} 
+          color={colors.error} 
+          colors={colors} 
+          width={CARD_WIDTH} 
+        />
+      </View>
+    </View>
+  );
+
+  const renderFilterBar = () => (
+    <View style={[styles.filterContainer, { backgroundColor: colors.background, paddingVertical: 12, zIndex: 10 }]}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        contentContainerStyle={[styles.filterScroll, { paddingHorizontal: 0 }]}
+        nestedScrollEnabled={true}
+      >
+        {FILTER_TABS.map(tab => (
+          <TouchableOpacity 
+            key={tab.id}
+            onPress={() => setFilterStatus(tab.id)}
+            style={[
+              styles.filterTab, 
+              { backgroundColor: filterStatus === tab.id ? colors.primary : colors.card, borderColor: colors.border }
+            ]}
+          >
+            <Text style={[
+              styles.filterTabText, 
+              { color: filterStatus === tab.id ? '#fff' : colors.secondaryText }
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const listData = [
+    { id: 'STICKY_FILTER', type: 'filter' },
+    ...(filteredBookings.length > 0 ? filteredBookings : [{ id: 'EMPTY_STATE', type: 'empty' }])
+  ];
+
+  const renderListItem = ({ item, index }) => {
+    if (item.type === 'filter') return renderFilterBar();
+    if (item.type === 'empty') {
+      return (
+        <View style={styles.emptyContainer}>
+          <Search size={48} color={colors.border} />
+          <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
+            Không tìm thấy lịch tư vấn nào cho trạng thái này.
+          </Text>
+        </View>
+      );
+    }
+    return renderBookingItem({ item });
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.statsContainer}>
-          <View style={[styles.statsRow, { paddingHorizontal: HORIZONTAL_PADDING }]}>
-            <StatItem 
-              label="Tổng" 
-              value={bookings.length} 
-              color={colors.text} 
-              colors={colors} 
-              width={CARD_WIDTH} 
-            />
-            <StatItem 
-              label="Xong" 
-              value={bookings.filter(b => b.status === 3 || b.status === 'Completed').length} 
-              color={colors.accentGreen} 
-              colors={colors} 
-              width={CARD_WIDTH} 
-            />
-            <StatItem 
-              label="Duyệt" 
-              value={bookings.filter(b => b.status === 2 || b.status === 'Confirmed').length} 
-              color={colors.accentCyan} 
-              colors={colors} 
-              width={CARD_WIDTH} 
-            />
-            <StatItem 
-              label="Hủy" 
-              value={bookings.filter(b => [4, 5, 'Cancel', 'NoResponse'].includes(b.status)).length} 
-              color={colors.error} 
-              colors={colors} 
-              width={CARD_WIDTH} 
-            />
-          </View>
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {FILTER_TABS.map(tab => (
-            <TouchableOpacity 
-              key={tab.id}
-              onPress={() => setFilterStatus(tab.id)}
-              style={[
-                styles.filterTab, 
-                { backgroundColor: filterStatus === tab.id ? colors.primary : colors.card, borderColor: colors.border }
-              ]}
-            >
-              <Text style={[
-                styles.filterTabText, 
-                { color: filterStatus === tab.id ? '#fff' : colors.secondaryText }
-              ]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -290,9 +350,11 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
         </View>
       ) : (
         <FlatList
-          data={filteredBookings}
-          keyExtractor={(item) => (item.id || item.bookingId).toString()}
-          renderItem={renderBookingItem}
+          data={listData}
+          keyExtractor={(item, index) => item.id || (item.bookingId ? item.bookingId.toString() : index.toString())}
+          renderItem={renderListItem}
+          ListHeaderComponent={renderHeader}
+          stickyHeaderIndices={[1]}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadBookings(true)} tintColor={colors.primary} />}
           ListEmptyComponent={
@@ -317,14 +379,6 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
         />
       )}
 
-      {showChatModal && (
-        <BookingChatModal
-          isVisible={showChatModal}
-          onClose={() => setShowChatModal(false)}
-          booking={selectedBooking}
-          session={activeChatSession}
-        />
-      )}
 
       {showReportModal && (
         <ConsultingReportModal
@@ -339,10 +393,26 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
       {showComplaintModal && (
         <UserReportModal
           isVisible={showComplaintModal}
-          onClose={() => setShowComplaintModal(false)}
+          onClose={() => {
+            setShowComplaintModal(false);
+            setViewOnlyComplaint(null);
+          }}
           bookingId={selectedBooking?.id || selectedBooking?.bookingId}
           targetUserId={selectedBooking?.advisorId}
           targetUserName={selectedBooking?.advisorName}
+          viewOnlyReport={viewOnlyComplaint}
+        />
+      )}
+
+      {showReviewModal && (
+        <ReviewModal
+          isVisible={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          booking={selectedBooking}
+          onDone={() => {
+            setShowReviewModal(false);
+            loadBookings(true);
+          }}
         />
       )}
     </View>
@@ -373,8 +443,8 @@ const styles = StyleSheet.create({
   },
   statLabel: { fontSize: 10, fontWeight: '700', marginBottom: 4, textTransform: 'uppercase' },
   statValue: { fontSize: 16, fontWeight: '900' },
-  filterContainer: { marginBottom: 16 },
-  filterScroll: { paddingHorizontal: 20, gap: 8 },
+  filterContainer: { marginBottom: 16, zIndex: 10 },
+  filterScroll: { gap: 8 },
   filterTab: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -393,7 +463,7 @@ const styles = StyleSheet.create({
   statusBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   divider: { height: 1, marginVertical: 12, opacity: 0.5 },
-  metaRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  metaRow: { flexDirection: 'row', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 13, fontWeight: '500' },
   cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },

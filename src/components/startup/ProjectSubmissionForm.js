@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, TextInput, Modal, ScrollView, TouchableOpacity,
-    ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Image
+    ActivityIndicator, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Image, StatusBar
 } from 'react-native';
 import { X, AlertCircle, Plus, Trash2, Upload, FileText, ChevronDown, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import projectSubmissionService from '../../services/projectSubmissionService';
+import validationService from '../../services/validationService';
+import optionService from '../../services/optionService';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -60,14 +62,44 @@ const ScaleButton = ({ children, onPress, style, activeOpacity = 0.8, disabled =
     );
 };
 
-const FormInput = ({ label, value, onChangeText, placeholder, multiline = false, optional = false, isNumber = false, error, colors, inputRef, onLayout }) => {
+const FormInput = ({ label, name, value, onChangeText, validationRule, currentStage, placeholder, multiline = false, isNumber = false, error, colors, inputRef, onLayout }) => {
     const { isDark } = useTheme();
     const [isFocused, setIsFocused] = useState(false);
+
+    const currentLength = value ? String(value).length : 0;
+    const maxLength = validationRule?.maxLength;
+    const minLength = validationRule?.minLength;
+    const isOverLimit = maxLength && currentLength > maxLength;
+    const isUnderLimit = minLength && currentLength > 0 && currentLength < minLength;
+
+    let isRequired = validationRule?.required;
+    if (currentStage !== null && currentStage !== undefined && validationRule?.stageOptionIds && validationRule.stageOptionIds.length > 0) {
+        const stageId = Number(currentStage);
+        const isStageInList = validationRule.stageOptionIds.some(id => Number(id) === stageId);
+        isRequired = isStageInList ? validationRule.required : !validationRule.required;
+    }
+
+    const displayLabel = validationRule?.displayName || label || validationRule?.fieldKey || name;
+
     return (
         <View style={styles.formGroup} onLayout={onLayout}>
-            <Text style={[styles.label, { color: colors.text }]}>
-                {label} {optional ? <Text style={styles.optional}>(Tùy chọn)</Text> : <Text style={{ color: colors.error }}>*</Text>}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, marginLeft: 4 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>
+                    {displayLabel} {!isRequired ? <Text style={styles.optional}>(Tùy chọn)</Text> : <Text style={{ color: colors.error }}>*</Text>}
+                </Text>
+                
+                {maxLength ? (
+                    <Text style={{ fontSize: 12, color: isOverLimit ? colors.error : colors.secondaryText, backgroundColor: isOverLimit ? colors.error + '15' : colors.mutedBackground, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' }}>
+                        {currentLength}/{maxLength}
+                    </Text>
+                ) : (
+                    currentLength > 0 && (
+                        <Text style={{ fontSize: 12, color: colors.secondaryText, backgroundColor: colors.mutedBackground, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' }}>
+                            {currentLength} ký tự
+                        </Text>
+                    )
+                )}
+            </View>
             <TextInput
                 ref={inputRef}
                 style={[
@@ -77,7 +109,6 @@ const FormInput = ({ label, value, onChangeText, placeholder, multiline = false,
                         backgroundColor: isFocused ? colors.card : (colors.inputBackground || colors.mutedBackground), 
                         color: colors.text,
                         borderColor: error ? colors.error : (isFocused ? colors.primary : (colors.inputBorder || colors.border)),
-                        // Subtle 3D effect optimized for Dark/Light
                         shadowColor: isDark ? "#fff" : (isFocused ? colors.primary : "#000"),
                         shadowOffset: { width: 0, height: isFocused ? 2 : 1 },
                         shadowOpacity: isDark ? (isFocused ? 0.15 : 0.08) : (isFocused ? 0.15 : 0.05),
@@ -88,14 +119,17 @@ const FormInput = ({ label, value, onChangeText, placeholder, multiline = false,
                 placeholder={placeholder}
                 placeholderTextColor={colors.secondaryText}
                 value={String(value)}
-                onChangeText={onChangeText}
+                onChangeText={(val) => onChangeText(name, val)}
                 multiline={multiline}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 textAlignVertical={multiline ? 'top' : 'center'}
                 keyboardType={isNumber ? "numeric" : "default"}
             />
-            {error && <Text style={styles.errorText}>{error}</Text>}
+            {isUnderLimit && !error && (
+                <Text style={{ color: '#f59e0b', fontSize: 12, marginTop: 4 }}>Cần ít nhất {minLength} ký tự</Text>
+            )}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
     );
 };
@@ -223,27 +257,114 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
 
     const [formData, setFormData] = useState({
         projectName: initialData?.projectName || initialData?.name || '',
-        shortDescription: initialData?.shortDescription || '',
-        developmentStage: initialData ? String(getStageNumericValue(initialData.developmentStage)) : '',
+        shortDescription: initialData?.shortDescription || initialData?.description || '',
+        developmentStage: initialData ? String(getStageNumericValue(initialData.developmentStage || initialData.stage)) : '',
         industry: initialData?.industry ? String(initialData.industry) : '',
-        problemStatement: initialData?.problemStatement || '',
-        solutionDescription: initialData?.solutionDescription || '',
-        targetCustomers: initialData?.targetCustomers || '',
-        uniqueValueProposition: initialData?.uniqueValueProposition || '',
-        marketSize: initialData?.marketSize || '',
-        businessModel: initialData?.businessModel || '',
-        revenue: initialData?.revenue || '',
+        problemStatement: initialData?.problemStatement || initialData?.problemDescription || '',
+        solutionDescription: initialData?.solutionDescription || initialData?.proposedSolution || initialData?.solution || '',
+        targetCustomers: initialData?.targetCustomers || initialData?.idealCustomerBuyer || '',
+        uniqueValueProposition: initialData?.uniqueValueProposition || initialData?.differentiator || '',
+        marketSize: initialData?.marketSize ? String(initialData.marketSize) : '',
+        businessModel: initialData?.businessModel || initialData?.revenueMethod || '',
+        revenue: initialData?.revenue ? String(initialData.revenue) : '',
         competitors: initialData?.competitors || '',
         teamMembers: getInitialTeam(),
         keySkills: initialData?.keySkills || '',
         teamExperience: initialData?.teamExperience || '',
+        location: initialData?.location || '',
+        vision: initialData?.vision || '',
+        mission: initialData?.mission || '',
+        coreValues: initialData?.coreValues || '',
+        roadmapText: initialData?.roadmapText || '',
+        fundingStatus: initialData?.fundingStatus || '',
+        website: initialData?.website || '',
+        facebook: initialData?.facebook || '',
+        linkedin: initialData?.linkedin || '',
+        videoUrl: initialData?.videoUrl || '',
         projectImageFile: null,
     });
 
-    const [imagePreview, setImagePreview] = useState(null);
+    const [imagePreview, setImagePreview] = useState(initialData?.projectImageUrl || initialData?.projectImage || null);
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    
+    const [isConfigLoading, setIsConfigLoading] = useState(true);
+    const [configError, setConfigError] = useState('');
+    const [validationRules, setValidationRules] = useState(null);
+    const [industries, setIndustries] = useState([]);
+    const [stages, setStages] = useState([]);
+
+    useEffect(() => {
+        if (visible && initialData) {
+            setFormData({
+                projectName: initialData?.projectName || initialData?.name || '',
+                shortDescription: initialData?.shortDescription || initialData?.description || '',
+                developmentStage: initialData ? String(getStageNumericValue(initialData.developmentStage || initialData.stage)) : '',
+                industry: initialData?.industry ? String(initialData.industry) : '',
+                problemStatement: initialData?.problemStatement || initialData?.problemDescription || '',
+                solutionDescription: initialData?.solutionDescription || initialData?.proposedSolution || initialData?.solution || '',
+                targetCustomers: initialData?.targetCustomers || initialData?.idealCustomerBuyer || '',
+                uniqueValueProposition: initialData?.uniqueValueProposition || initialData?.differentiator || '',
+                marketSize: initialData?.marketSize ? String(initialData.marketSize) : '',
+                businessModel: initialData?.businessModel || initialData?.revenueMethod || '',
+                revenue: initialData?.revenue ? String(initialData.revenue) : '',
+                competitors: initialData?.competitors || '',
+                teamMembers: getInitialTeam(),
+                keySkills: initialData?.keySkills || '',
+                teamExperience: initialData?.teamExperience || '',
+                location: initialData?.location || '',
+                vision: initialData?.vision || '',
+                mission: initialData?.mission || '',
+                coreValues: initialData?.coreValues || '',
+                roadmapText: initialData?.roadmapText || '',
+                fundingStatus: initialData?.fundingStatus || '',
+                website: initialData?.website || '',
+                facebook: initialData?.facebook || '',
+                linkedin: initialData?.linkedin || '',
+                videoUrl: initialData?.videoUrl || '',
+                projectImageFile: null,
+            });
+            setImagePreview(initialData?.projectImageUrl || initialData?.projectImage || null);
+            setCurrentStep(1);
+            setErrors({});
+            setSubmitError('');
+        }
+    }, [visible, initialData]);
+    const fetchConfig = async () => {
+        try {
+            setIsConfigLoading(true);
+            setConfigError('');
+            const formKey = isEdit ? 'project.update' : 'project.create';
+            let [rules, fetchedIndustries, fetchedStages] = await Promise.all([
+                validationService.getFormRules(formKey),
+                optionService.getIndustries(),
+                optionService.getStages()
+            ]);
+            
+            // Fallback to project.create if project.update has no rules
+            if (isEdit && (!rules || Object.keys(rules).length === 0)) {
+                rules = await validationService.getFormRules('project.create');
+            }
+
+            if (!rules || Object.keys(rules).length === 0) {
+                throw new Error('Không thể tải dữ liệu cấu hình biểu mẫu.');
+            }
+            
+            setValidationRules(rules);
+            setIndustries(fetchedIndustries || []);
+            setStages(fetchedStages || []);
+        } catch (error) {
+            console.error('Config fetch error:', error);
+            setConfigError('Không thể tải cấu hình biểu mẫu. Vui lòng thử lại.');
+        } finally {
+            setIsConfigLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (visible || isPage) fetchConfig();
+    }, [visible, isPage, isEdit]);
 
     const isIdea = String(formData.developmentStage) === '0';
     const isMVP = String(formData.developmentStage) === '1';
@@ -251,7 +372,22 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
 
     const handleInputChange = (name, value) => {
         setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+        
+        // Real-time validation on change
+        if (validationRules) {
+            const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+            const rule = validationRules[ruleKey];
+            if (rule) {
+                // If it's a required field and value becomes empty, validateField will return required error.
+                // We show it immediately because user has explicitly touched and cleared it.
+                const valError = validationService.validateField(value, rule, formData.developmentStage);
+                setErrors(prev => ({ ...prev, [name]: valError }));
+            } else if (errors[name]) {
+                setErrors(prev => ({ ...prev, [name]: '' }));
+            }
+        } else if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
+        }
     };
 
     const handleImagePick = async () => {
@@ -306,43 +442,29 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
     };
 
     const validateStep = () => {
+        if (!validationRules) return false;
+
+        const stepFields = {
+            1: ['projectName', 'shortDescription', 'developmentStage', 'industry', 'problemStatement'],
+            2: ['solutionDescription', 'targetCustomers', 'uniqueValueProposition', 'marketSize', 'revenue', 'businessModel'],
+            3: ['competitors', 'keySkills', 'teamExperience']
+        };
+
+        const currentFields = stepFields[currentStep] || [];
         const newErrors = {};
 
-        if (currentStep === 1) {
-            if (!formData.projectName.trim()) newErrors.projectName = 'Tên dự án là bắt buộc';
-            if (!formData.shortDescription.trim()) newErrors.shortDescription = 'Mô tả ngắn là bắt buộc';
-            if (formData.developmentStage === '') newErrors.developmentStage = 'Vui lòng chọn giai đoạn phát triển';
-            if (formData.industry === '') newErrors.industry = 'Vui lòng chọn lĩnh vực';
-            if (!formData.problemStatement.trim()) newErrors.problemStatement = 'Mô tả vấn đề là bắt buộc';
-        }
-
-        if (currentStep === 2) {
-            if (!formData.solutionDescription.trim()) newErrors.solutionDescription = 'Mô tả giải pháp là bắt buộc';
-            if (!formData.targetCustomers.trim()) newErrors.targetCustomers = 'Mục tiêu là bắt buộc';
-
-            if (isMVP || isGrowth) {
-                if (!formData.uniqueValueProposition?.trim()) newErrors.uniqueValueProposition = 'UVP là bắt buộc';
-                if (!formData.businessModel?.trim()) newErrors.businessModel = 'Mô hình kinh doanh là bắt buộc';
+        currentFields.forEach(name => {
+            const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+            const rule = validationRules[ruleKey];
+            if (rule) {
+                const error = validationService.validateField(formData[name], rule, formData.developmentStage);
+                if (error) newErrors[name] = error;
             }
-
-            if (isGrowth) {
-                if (!formData.revenue || parseInt(formData.revenue) <= 0) newErrors.revenue = 'Doanh thu > 0';
-                if (!formData.marketSize || parseInt(formData.marketSize) <= 0) newErrors.marketSize = 'Thị trường > 0';
-            }
-        }
+        });
 
         if (currentStep === 3) {
             const hasEmptyMembers = formData.teamMembers.some(m => !m.name.trim());
             if (hasEmptyMembers) newErrors.teamMembers = 'Nhập tên thành viên';
-
-            if (isMVP || isGrowth) {
-                if (!formData.competitors?.trim()) newErrors.competitors = 'Bắt buộc';
-                if (!formData.keySkills?.trim()) newErrors.keySkills = 'Bắt buộc';
-            }
-
-            if (isGrowth) {
-                if (!formData.teamExperience?.trim()) newErrors.teamExperience = 'Bắt buộc';
-            }
         }
 
         setErrors(newErrors);
@@ -410,7 +532,13 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+            <View style={[
+                styles.header, 
+                { 
+                    borderBottomColor: colors.border, 
+                    paddingTop: Platform.OS === 'ios' ? insets.top : (StatusBar.currentHeight || 0) + 10
+                }
+            ]}>
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}><X size={24} color={colors.text} /></TouchableOpacity>
                 <View style={styles.headerTitleContainer}>
                     <Text style={[styles.headerTitle, { color: colors.text }]}>{isEdit ? 'Cập Nhật Dự Án' : 'Đăng Dự Án'}</Text>
@@ -435,68 +563,114 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                         </View>
                     ) : null}
 
-                    {currentStep === 1 && (
-                        <View>
-                            <FormInput label="Tên Dự Án" value={formData.projectName} onChangeText={(val) => handleInputChange('projectName', val)} placeholder="Ví dụ: AI Smart" error={errors.projectName} colors={colors} />
-                            
-                            <View style={styles.formGroup}>
-                                <Text style={[styles.label, { color: colors.text }]}>Hình Ảnh Dự Án <Text style={styles.optional}>(Tùy chọn)</Text></Text>
-                                <TouchableOpacity style={[styles.imageUploadBtn, { borderColor: colors.border, backgroundColor: imagePreview ? 'transparent' : colors.mutedBackground }]} onPress={handleImagePick}>
-                                    {imagePreview ? (
-                                        <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden' }}>
-                                            <Image source={{ uri: imagePreview }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                                            <TouchableOpacity style={styles.removeImageBtn} onPress={handleRemoveImage}>
-                                                <Trash2 size={16} color="white" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : (
-                                        <View style={{ alignItems: 'center' }}>
-                                            <Upload size={32} color={colors.primary} style={{ marginBottom: 8 }} />
-                                            <Text style={{ color: colors.text, fontWeight: '600' }}>Nhấn để chọn hình ảnh</Text>
-                                            <Text style={{ color: colors.secondaryText, fontSize: 12 }}>PNG, JPG (Tối đa 5MB)</Text>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                                {errors.projectImageFile && <Text style={styles.errorText}>{errors.projectImageFile}</Text>}
-                            </View>
-
-                            <FormInput label="Mô Tả Ngắn" value={formData.shortDescription} onChangeText={(val) => handleInputChange('shortDescription', val)} placeholder="Tóm tắt về sản phẩm..." multiline error={errors.shortDescription} colors={colors} />
-                            <CustomSelect label="Giai Đoạn Phát Triển" value={formData.developmentStage} onValueChange={(val) => handleInputChange('developmentStage', val)} options={[{label:'Ý tưởng (Idea)', value:'0'},{label:'MVP', value:'1'},{label:'Vận hành (Growth)', value:'2'}]} error={errors.developmentStage} colors={colors} />
-                            <CustomSelect label="Lĩnh Vực" value={formData.industry} onValueChange={(val) => handleInputChange('industry', val)} options={INDUSTRIES} error={errors.industry} colors={colors} />
-                            <FormInput label="Vấn Đề Giải Quyết" value={formData.problemStatement} onChangeText={(val) => handleInputChange('problemStatement', val)} placeholder="Thị trường đang thiếu gì?" multiline error={errors.problemStatement} colors={colors} />
+                    {isConfigLoading ? (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ marginTop: 12, color: colors.secondaryText }}>Đang tải cấu hình biểu mẫu...</Text>
                         </View>
-                    )}
+                    ) : configError ? (
+                        <View style={{ padding: 40, alignItems: 'center' }}>
+                            <AlertCircle size={48} color={colors.error} style={{ marginBottom: 16 }} />
+                            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Lỗi khởi tạo</Text>
+                            <Text style={{ color: colors.secondaryText, textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+                                {configError}
+                            </Text>
+                            <TouchableOpacity 
+                                style={[styles.addBtn, { backgroundColor: colors.primary, paddingHorizontal: 32 }]} 
+                                onPress={fetchConfig}
+                            >
+                                <Text style={styles.addBtnText}>Thử lại ngay</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <>
+                            {currentStep === 1 && (
+                                <View>
+                                    <FormInput name="projectName" validationRule={validationRules?.['projectname']} currentStage={formData.developmentStage} label="Tên Dự Án" value={formData.projectName} onChangeText={handleInputChange} placeholder="Ví dụ: AI Smart" error={errors.projectName} colors={colors} />
+                                    
+                                    <View style={styles.formGroup}>
+                                        <Text style={[styles.label, { color: colors.text }]}>Hình Ảnh Dự Án <Text style={styles.optional}>(Tùy chọn)</Text></Text>
+                                        <TouchableOpacity style={[styles.imageUploadBtn, { borderColor: colors.border, backgroundColor: imagePreview ? 'transparent' : colors.mutedBackground }]} onPress={handleImagePick}>
+                                            {imagePreview ? (
+                                                <View style={{ width: '100%', height: 180, borderRadius: 12, overflow: 'hidden' }}>
+                                                    <Image source={{ uri: imagePreview }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                                    <TouchableOpacity style={styles.removeImageBtn} onPress={handleRemoveImage}>
+                                                        <Trash2 size={16} color="white" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : (
+                                                <View style={{ alignItems: 'center' }}>
+                                                    <Upload size={28} color={colors.primary} style={{ marginBottom: 4 }} />
+                                                    <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>Nhấn để chọn hình ảnh</Text>
+                                                    <Text style={{ color: colors.secondaryText, fontSize: 11 }}>PNG, JPG (Tối đa 5MB)</Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                        {errors.projectImageFile && <Text style={styles.errorText}>{errors.projectImageFile}</Text>}
+                                    </View>
 
-                    {currentStep === 2 && (
-                        <View>
-                            <FormInput label="Mô Tả Giải Pháp" value={formData.solutionDescription} onChangeText={(val) => handleInputChange('solutionDescription', val)} placeholder="Giải pháp của bạn hoạt động như thế nào?" multiline error={errors.solutionDescription} colors={colors} />
-                            <FormInput label="Khách Hàng Mục Tiêu" value={formData.targetCustomers} onChangeText={(val) => handleInputChange('targetCustomers', val)} placeholder="Họ là ai? Ở đâu?" multiline error={errors.targetCustomers} colors={colors} />
-                            <FormInput label="Giá Trị Độc Đáo (UVP)" value={formData.uniqueValueProposition} onChangeText={(val) => handleInputChange('uniqueValueProposition', val)} placeholder="Tại sao khách hàng chọn bạn?" multiline optional={isIdea} error={errors.uniqueValueProposition} colors={colors} />
+                                    <FormInput name="shortDescription" validationRule={validationRules?.['shortdescription']} currentStage={formData.developmentStage} label="Mô Tả Ngắn" value={formData.shortDescription} onChangeText={handleInputChange} placeholder="Tóm tắt về sản phẩm..." multiline error={errors.shortDescription} colors={colors} />
+                                    
+                                    <FormInput name="location" label="Địa điểm" value={formData.location} onChangeText={handleInputChange} placeholder="Thành phố, Tỉnh thành..." error={errors.location} colors={colors} />
 
-                            {!isIdea && (
-                                <View style={styles.row}>
-                                    <View style={{ flex: 1 }}><FormInput label="Quy mô TT (VND)" value={formData.marketSize} onChangeText={(val) => handleInputChange('marketSize', val)} placeholder="0" optional={!isGrowth} isNumber error={errors.marketSize} colors={colors} /></View>
-                                    <View style={{ width: 12 }} />
-                                    <View style={{ flex: 1 }}><FormInput label="Doanh thu (VND)" value={formData.revenue} onChangeText={(val) => handleInputChange('revenue', val)} placeholder="0" optional={!isGrowth} isNumber error={errors.revenue} colors={colors} /></View>
+                                    <CustomSelect label="Giai Đoạn Phát Triển" value={formData.developmentStage} onValueChange={(val) => handleInputChange('developmentStage', val)} options={stages} error={errors.developmentStage} colors={colors} />
+                                    <CustomSelect label="Lĩnh Vực" value={formData.industry} onValueChange={(val) => handleInputChange('industry', val)} options={industries} error={errors.industry} colors={colors} />
+                                    <FormInput name="problemStatement" validationRule={validationRules?.['problemstatement']} currentStage={formData.developmentStage} label="Vấn Đề Giải Quyết" value={formData.problemStatement} onChangeText={handleInputChange} placeholder="Thị trường đang thiếu gì?" multiline error={errors.problemStatement} colors={colors} />
                                 </View>
                             )}
-                            <FormInput label="Mô Hình Kinh Doanh" value={formData.businessModel} onChangeText={(val) => handleInputChange('businessModel', val)} placeholder="Bạn kiếm tiền từ đâu?" multiline optional={isIdea} error={errors.businessModel} colors={colors} />
+
+                    {currentStep === 2 && !isConfigLoading && !configError && (
+                        <View>
+                            <FormInput name="vision" label="Tầm nhìn" value={formData.vision} onChangeText={handleInputChange} placeholder="Dự án trong 5 năm tới..." multiline colors={colors} />
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}><FormInput name="mission" label="Sứ mệnh" value={formData.mission} onChangeText={handleInputChange} placeholder="Giá trị mang lại..." multiline colors={colors} /></View>
+                                <View style={{ width: 12 }} />
+                                <View style={{ flex: 1 }}><FormInput name="coreValues" label="Giá trị cốt lõi" value={formData.coreValues} onChangeText={handleInputChange} placeholder="Nguyên tắc theo đuổi..." multiline colors={colors} /></View>
+                            </View>
+                            <FormInput name="solutionDescription" validationRule={validationRules?.['solutiondescription']} currentStage={formData.developmentStage} label="Mô Tả Giải Pháp" value={formData.solutionDescription} onChangeText={handleInputChange} placeholder="Giải pháp của bạn hoạt động như thế nào?" multiline error={errors.solutionDescription} colors={colors} />
+                            <FormInput name="targetCustomers" validationRule={validationRules?.['targetcustomers']} currentStage={formData.developmentStage} label="Khách Hàng Mục Tiêu" value={formData.targetCustomers} onChangeText={handleInputChange} placeholder="Họ là ai? Ở đâu?" multiline error={errors.targetCustomers} colors={colors} />
+                            <FormInput name="uniqueValueProposition" validationRule={validationRules?.['uniquevalueproposition']} currentStage={formData.developmentStage} label="Giá Trị Độc Đáo (UVP)" value={formData.uniqueValueProposition} onChangeText={handleInputChange} placeholder="Tại sao khách hàng chọn bạn?" multiline optional={isIdea} error={errors.uniqueValueProposition} colors={colors} />
+                            <FormInput name="roadmapText" label="Lộ trình phát triển" value={formData.roadmapText} onChangeText={handleInputChange} placeholder="Các mốc quan trọng..." multiline colors={colors} />
+                            <FormInput name="fundingStatus" label="Tình trạng gọi vốn" value={formData.fundingStatus} onChangeText={handleInputChange} placeholder="Đã gọi được bao nhiêu?" colors={colors} />
                         </View>
                     )}
 
-                    {currentStep === 3 && (
+                    {currentStep === 3 && !isConfigLoading && !configError && (
                         <View>
-                            <FormInput label="Đối thủ cạnh tranh" value={formData.competitors} onChangeText={(val) => handleInputChange('competitors', val)} placeholder="Ai đang làm giống bạn?" multiline optional={isIdea} error={errors.competitors} colors={colors} />
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}><FormInput name="marketSize" validationRule={validationRules?.['marketsize']} currentStage={formData.developmentStage} label="Quy mô TT (VND)" value={formData.marketSize} onChangeText={handleInputChange} placeholder="0" optional={!isGrowth} isNumber error={errors.marketSize} colors={colors} /></View>
+                                <View style={{ width: 12 }} />
+                                <View style={{ flex: 1 }}><FormInput name="revenue" validationRule={validationRules?.['revenue']} currentStage={formData.developmentStage} label="Doanh thu (VND)" value={formData.revenue} onChangeText={handleInputChange} placeholder="0" optional={!isGrowth} isNumber error={errors.revenue} colors={colors} /></View>
+                            </View>
+                            <FormInput name="businessModel" validationRule={validationRules?.['businessmodel']} currentStage={formData.developmentStage} label="Mô Hình Kinh Doanh" value={formData.businessModel} onChangeText={handleInputChange} placeholder="Bạn kiếm tiền từ đâu?" multiline optional={isIdea} error={errors.businessModel} colors={colors} />
+                            <FormInput name="competitors" validationRule={validationRules?.['competitors']} currentStage={formData.developmentStage} label="Đối thủ cạnh tranh" value={formData.competitors} onChangeText={handleInputChange} placeholder="Ai đang làm giống bạn?" multiline optional={isIdea} error={errors.competitors} colors={colors} />
 
                             <View style={styles.formGroup}>
                                 <View style={styles.teamHeader}>
                                     <Text style={[styles.label, { color: colors.text }]}>Thành Viên Đội <Text style={{ color: colors.error }}>*</Text></Text>
-                                    <TouchableOpacity onPress={addTeamMember} style={[styles.addBtn, { backgroundColor: colors.primary }]}><Plus size={14} color="#fff" /><Text style={styles.addBtnText}>Thêm</Text></TouchableOpacity>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ marginRight: 12, fontSize: 13, color: colors.secondaryText, fontWeight: '600' }}>
+                                            Tổng số: {formData.teamMembers.length}
+                                        </Text>
+                                        <TouchableOpacity onPress={addTeamMember} style={[styles.addBtn, { backgroundColor: colors.primary }]}><Plus size={14} color="#fff" /><Text style={styles.addBtnText}>Thêm</Text></TouchableOpacity>
+                                    </View>
                                 </View>
                                 {formData.teamMembers.map((member, idx) => (
                                     <Animated.View key={member.id} style={[styles.memberRow, { opacity: member.anim, transform: [{ translateY: member.anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
-                                        <TextInput style={[styles.input, { flex: 1, backgroundColor: colors.inputBackground, borderColor: colors.inputBorder }]} placeholder="Họ và tên" value={member.name} onChangeText={(v) => handleMemberChange(idx, 'name', v)} />
-                                        <TextInput style={[styles.input, { flex: 1, backgroundColor: colors.inputBackground, borderColor: colors.inputBorder, marginHorizontal: 8 }]} placeholder="Vai trò (CEO)" value={member.role} onChangeText={(v) => handleMemberChange(idx, 'role', v)} />
+                                        <TextInput 
+                                            style={[styles.input, { flex: 1, backgroundColor: activeTheme.isDark ? 'rgba(255,255,255,0.06)' : colors.inputBackground, borderColor: colors.inputBorder, color: colors.text }]} 
+                                            placeholder="Họ và tên" 
+                                            placeholderTextColor={colors.secondaryText + '80'}
+                                            value={member.name} 
+                                            onChangeText={(v) => handleMemberChange(idx, 'name', v)} 
+                                        />
+                                        <TextInput 
+                                            style={[styles.input, { flex: 1, backgroundColor: activeTheme.isDark ? 'rgba(255,255,255,0.06)' : colors.inputBackground, borderColor: colors.inputBorder, color: colors.text, marginHorizontal: 8 }]} 
+                                            placeholder="Vai trò (CEO)" 
+                                            placeholderTextColor={colors.secondaryText + '80'}
+                                            value={member.role} 
+                                            onChangeText={(v) => handleMemberChange(idx, 'role', v)} 
+                                        />
                                         <TouchableOpacity style={styles.removeBtn} onPress={() => removeTeamMember(idx)} disabled={formData.teamMembers.length <= 1}>
                                             <Trash2 size={20} color={formData.teamMembers.length <= 1 ? colors.border : colors.destructive} />
                                         </TouchableOpacity>
@@ -505,21 +679,34 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                                 {errors.teamMembers && <Text style={styles.errorText}>{errors.teamMembers}</Text>}
                             </View>
 
-                            <FormInput label="Kỹ năng cốt lõi" value={formData.keySkills} onChangeText={(val) => handleInputChange('keySkills', val)} placeholder="AI, Sales..." optional={isIdea} error={errors.keySkills} colors={colors} />
-                            <FormInput label="Kinh nghiệm đội" value={formData.teamExperience} onChangeText={(val) => handleInputChange('teamExperience', val)} placeholder="Các dự án nổi bật..." multiline optional={!isGrowth} error={errors.teamExperience} colors={colors} />
+                            <FormInput name="keySkills" validationRule={validationRules?.['keyskills']} currentStage={formData.developmentStage} label="Kỹ năng cốt lõi" value={formData.keySkills} onChangeText={handleInputChange} placeholder="AI, Sales..." optional={isIdea} error={errors.keySkills} colors={colors} />
+                            <FormInput name="teamExperience" validationRule={validationRules?.['teamexperience']} currentStage={formData.developmentStage} label="Kinh nghiệm đội" value={formData.teamExperience} onChangeText={handleInputChange} placeholder="Các dự án nổi bật..." multiline optional={!isGrowth} error={errors.teamExperience} colors={colors} />
+                            
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}><FormInput name="website" label="Website" value={formData.website} onChangeText={handleInputChange} placeholder="https://..." colors={colors} /></View>
+                                <View style={{ width: 12 }} />
+                                <View style={{ flex: 1 }}><FormInput name="videoUrl" label="Video Demo" value={formData.videoUrl} onChangeText={handleInputChange} placeholder="YouTube..." colors={colors} /></View>
+                            </View>
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}><FormInput name="facebook" label="Facebook" value={formData.facebook} onChangeText={handleInputChange} placeholder="fb.com/..." colors={colors} /></View>
+                                <View style={{ width: 12 }} />
+                                <View style={{ flex: 1 }}><FormInput name="linkedin" label="LinkedIn" value={formData.linkedin} onChangeText={handleInputChange} placeholder="in/..." colors={colors} /></View>
+                            </View>
                         </View>
                     )}
-                    <View style={{ height: 10 }} />
+                    </>
+                    )}
                 </ScrollView>
             </Animated.View>
 
             {/* Footer Steps */}
+            {!isConfigLoading && !configError && (
             <View style={[
                 styles.footer, 
                 { 
                     borderTopColor: colors.border, 
                     backgroundColor: colors.card,
-                    paddingBottom: Math.max(insets.bottom, 12) 
+                    paddingBottom: Platform.OS === 'ios' ? insets.bottom + 4 : Math.max(insets.bottom, 20)
                 }
             ]}>
                 {currentStep > 1 && (
@@ -529,6 +716,7 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                     {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>{currentStep < totalSteps ? 'Tiếp Theo' : 'Hoàn Thành'}</Text>}
                 </TouchableOpacity>
             </View>
+            )}
         </KeyboardAvoidingView>
     );
 
@@ -542,16 +730,16 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
 }
 
 const styles = StyleSheet.create({
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, paddingTop: Platform.OS === 'ios' ? 48 : 20 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: 1 },
     closeBtn: { width: 44, height: 44, justifyContent: 'center' },
     headerTitleContainer: { flex: 1, alignItems: 'center' },
     headerTitle: { fontSize: 18, fontWeight: '700' },
     headerSubtitle: { fontSize: 13, marginTop: 2 },
-    progressContainer: { marginBottom: 20 },
+    progressContainer: { marginBottom: 12 },
     progressTrack: { height: 4, width: '100%' },
     progressFill: { height: '100%', borderRadius: 2 },
-    scrollContent: { paddingHorizontal: 20, paddingBottom: 10 },
-    formGroup: { marginBottom: 20 },
+    scrollContent: { paddingHorizontal: 16, paddingBottom: 0 },
+    formGroup: { marginBottom: 12 },
     label: { fontSize: 14, fontWeight: '700', marginBottom: 8, marginLeft: 4 },
     optional: { fontSize: 12, opacity: 0.6, fontWeight: '400' },
     input: { 
@@ -574,7 +762,7 @@ const styles = StyleSheet.create({
     addBtnText: { color: '#fff', fontSize: 13, fontWeight: '600', marginLeft: 4 },
     memberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     removeBtn: { padding: 8 },
-    footer: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1 },
+    footer: { flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 8, borderTopWidth: 1 },
     footerBtn: { height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     imageUploadBtn: { borderWidth: 2, borderStyle: 'dashed', borderRadius: 12, padding: 20, alignItems: 'center', justifyContent: 'center' },
     removeImageBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(255,0,0,0.8)', padding: 8, borderRadius: 20 },

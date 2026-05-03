@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  ScrollView, TextInput, ActivityIndicator, SafeAreaView,
+  ScrollView, TextInput, ActivityIndicator,
   Alert, Dimensions 
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, FileText, CheckCircle, AlertCircle, 
   Clock, RotateCcw, Send 

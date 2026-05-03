@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
-import { Check, AlertCircle, Camera, FileText, Globe, Building2, User, Phone, MapPin } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { Check, AlertCircle, Building2, User, Phone, Globe } from 'lucide-react-native';
 import startupProfileService from '../services/startupProfileService';
+import enumService from '../services/enumService';
+import validationService from '../services/validationService';
 import { useTheme } from '../context/ThemeContext';
-
-const INDUSTRIES = [
-  'Fintech', 'Edtech', 'Healthtech', 'Agritech', 'E-Commerce', 
-  'Logistics', 'Proptech', 'Cleantech', 'SaaS', 'AI & Big Data', 
-  'Web3 & Crypto', 'Food & Beverage', 'Manufacturing', 'Media & Entertainment', 'Khác'
-];
+import DynamicInputField from './common/DynamicInputField';
 
 export default function StartupProfileForm({ initialData, user, onSuccess, onCancel }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  
   const [formData, setFormData] = useState({
     companyName: '',
     logoUrl: '',
@@ -20,19 +18,57 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
     contactInfo: '',
     countryCity: '',
     website: '',
-    industry: 0,
+    industry: '',
     businessLicenseUrl: '',
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState('');
   const [errors, setErrors] = useState({});
+  const [validationRules, setValidationRules] = useState(null);
+  const [industries, setIndustries] = useState([]);
+
+  const fetchConfig = async () => {
+    try {
+      setIsConfigLoading(true);
+      setConfigError('');
+      const [rules, fetchedIndustries] = await Promise.all([
+        validationService.getFormRules('startup.update'),
+        enumService.getEnumOptions('Industry')
+      ]);
+      
+      if (!rules || Object.keys(rules).length === 0) {
+        throw new Error('Không thể tải dữ liệu cấu hình từ máy chủ.');
+      }
+      
+      setValidationRules(rules);
+      setIndustries(fetchedIndustries || []);
+    } catch (error) {
+      console.error('Error fetching config:', error);
+      setConfigError('Không thể tải cấu hình biểu mẫu. Vui lòng kiểm tra kết nối mạng và thử lại.');
+    } finally {
+      setIsConfigLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (initialData) {
-      let industryVal = initialData.industry || 0;
-      if (typeof industryVal === 'string') {
-        const idx = INDUSTRIES.indexOf(industryVal);
-        industryVal = idx !== -1 ? idx : 14;
+    fetchConfig();
+  }, []);
+
+  useEffect(() => {
+    if (initialData && !isConfigLoading) {
+      // Find industry value
+      let industryVal = '';
+      if (initialData.industry) {
+        const indString = String(initialData.industry).toLowerCase();
+        // Try to find matching ID
+        const matched = industries.find(i => 
+          String(i.value) === indString || 
+          i.label.toLowerCase() === indString ||
+          i.label.toLowerCase().replace(/ /g, '_') === indString
+        );
+        industryVal = matched ? String(matched.value) : String(initialData.industry);
       }
 
       setFormData({
@@ -46,18 +82,38 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
         businessLicenseUrl: initialData.businessLicenseUrl || '',
       });
     }
-  }, [initialData]);
+  }, [initialData, isConfigLoading, industries]);
+
+  const handleChange = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear global error
+    if (errors.submit) setErrors(prev => ({ ...prev, submit: null }));
+  };
 
   const validate = () => {
-    const newErrors = {};
-    if (!formData.companyName.trim()) newErrors.companyName = 'Tên công ty là bắt buộc';
-    if (!formData.founder.trim()) newErrors.founder = 'Tên người sáng lập là bắt buộc';
-    if (!formData.contactInfo.trim()) newErrors.contactInfo = 'Thông tin liên hệ là bắt buộc';
-    if (!formData.countryCity.trim()) newErrors.countryCity = 'Địa phương là bắt buộc';
-    if (!formData.website.trim()) newErrors.website = 'Website là bắt buộc';
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    if (!validationRules) {
+      // Fallback basic validation
+      const newErrors = {};
+      if (!formData.companyName.trim()) newErrors.companyName = 'Tên công ty là bắt buộc';
+      if (!formData.founder.trim()) newErrors.founder = 'Tên người sáng lập là bắt buộc';
+      if (!formData.industry) newErrors.industry = 'Lĩnh vực là bắt buộc';
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    }
+
+    const fieldMapping = {
+      companyName: 'companyname',
+      founder: 'founder',
+      contactInfo: 'contactinfo',
+      countryCity: 'countrycity',
+      website: 'website',
+      industry: 'industry'
+    };
+
+    const validationResult = validationService.validateForm(formData, validationRules, fieldMapping);
+    setErrors(validationResult.errors);
+    return validationResult.isValid;
   };
 
   const handleSubmit = async () => {
@@ -70,6 +126,7 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
 
       const payload = {
         ...formData,
+        industry: formData.industry,
         userId: user?.userId
       };
 
@@ -93,35 +150,32 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
     }
   };
 
-  const renderInput = (label, name, icon, placeholder, keyboardType = 'default') => (
-    <View style={styles.formGroup}>
-      <Text style={[styles.label, { color: colors.text }]}>
-        {label} <Text style={{ color: colors.error }}>*</Text>
-      </Text>
-      <View style={[
-        styles.inputContainer, 
-        { 
-          backgroundColor: colors.inputBackground, 
-          borderColor: colors.inputBorder 
-        },
-        errors[name] && { borderColor: colors.error }
-      ]}>
-        {React.cloneElement(icon, { color: colors.secondaryText })}
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
-          placeholder={placeholder}
-          value={String(formData[name])}
-          onChangeText={(text) => {
-            setFormData(prev => ({ ...prev, [name]: text }));
-            if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
-          }}
-          keyboardType={keyboardType}
-          placeholderTextColor={colors.secondaryText}
-        />
+  if (isConfigLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.secondaryText, marginTop: 12 }}>Đang tải cấu hình biểu mẫu...</Text>
       </View>
-      {errors[name] && <Text style={[styles.errorText, { color: colors.error }]}>{errors[name]}</Text>}
-    </View>
-  );
+    );
+  }
+
+  if (configError) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <AlertCircle size={48} color={colors.error} style={{ marginBottom: 16 }} />
+        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Lỗi khởi tạo biểu mẫu</Text>
+        <Text style={{ color: colors.secondaryText, textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>
+          {configError}
+        </Text>
+        <TouchableOpacity 
+          style={[styles.submitBtn, { backgroundColor: colors.primary, paddingHorizontal: 32 }]} 
+          onPress={fetchConfig}
+        >
+          <Text style={styles.submitText}>Thử lại ngay</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView 
@@ -141,20 +195,61 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
           </View>
         )}
 
-        {renderInput('Tên công ty', 'companyName', <Building2 size={18} />, 'Ví dụ: TechStartup VN')}
-        {renderInput('Người sáng lập', 'founder', <User size={18} />, 'Tên của bạn')}
-        {renderInput('Thông tin liên hệ', 'contactInfo', <Phone size={18} />, 'Email hoặc số điện thoại', 'email-address')}
-        {renderInput('Địa phương', 'countryCity', <Building2 size={18} />, 'Tỉnh/Thành phố')}
-        {renderInput('Website', 'website', <Globe size={18} />, 'https://example.com', 'url')}
+        <DynamicInputField
+          name="companyName"
+          label="Tên công ty"
+          value={formData.companyName}
+          onChangeText={handleChange}
+          validationRule={validationRules?.['companyname']}
+          placeholder="Ví dụ: TechStartup VN"
+        />
+
+        <DynamicInputField
+          name="founder"
+          label="Người sáng lập"
+          value={formData.founder}
+          onChangeText={handleChange}
+          validationRule={validationRules?.['founder']}
+          placeholder="Tên của bạn"
+        />
+
+        <DynamicInputField
+          name="contactInfo"
+          label="Thông tin liên hệ"
+          value={formData.contactInfo}
+          onChangeText={handleChange}
+          validationRule={validationRules?.['contactinfo']}
+          placeholder="Email hoặc số điện thoại"
+          keyboardType="email-address"
+        />
+
+        <DynamicInputField
+          name="countryCity"
+          label="Địa phương"
+          value={formData.countryCity}
+          onChangeText={handleChange}
+          validationRule={validationRules?.['countrycity']}
+          placeholder="Tỉnh/Thành phố"
+        />
+
+        <DynamicInputField
+          name="website"
+          label="Website"
+          value={formData.website}
+          onChangeText={handleChange}
+          validationRule={validationRules?.['website']}
+          placeholder="https://example.com"
+          keyboardType="url"
+        />
 
         <View style={styles.formGroup}>
-          <Text style={[styles.label, { color: colors.text }]}>Lĩnh vực</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Lĩnh vực {validationRules?.['industry']?.required && <Text style={{ color: colors.error }}>*</Text>}</Text>
           <View style={styles.industryGrid}>
-            {INDUSTRIES.map((ind, idx) => {
-              const isSelected = formData.industry === idx;
+            {industries.map((ind) => {
+              const isSelected = formData.industry === String(ind.value);
               return (
                 <TouchableOpacity
-                  key={idx}
+                  key={ind.value}
                   style={[
                     styles.industryItem, 
                     { 
@@ -162,7 +257,7 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
                       backgroundColor: isSelected ? colors.primary : 'transparent'
                     }
                   ]}
-                  onPress={() => setFormData(prev => ({ ...prev, industry: idx }))}
+                  onPress={() => handleChange('industry', String(ind.value))}
                 >
                   <Text style={[
                     styles.industryText, 
@@ -171,12 +266,13 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
                       fontWeight: isSelected ? '600' : '400'
                     }
                   ]}>
-                    {ind}
+                    {ind.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+          {errors.industry && <Text style={{ color: colors.error, fontSize: 12, marginTop: 4 }}>{errors.industry}</Text>}
         </View>
 
         <View style={styles.actions}>
@@ -217,9 +313,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, marginBottom: 24 },
   formGroup: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 52 },
-  input: { flex: 1, marginLeft: 10, fontSize: 15 },
-  errorText: { fontSize: 12, marginTop: 4, fontWeight: '500' },
   errorBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 20 },
   errorBannerText: { fontSize: 13, marginLeft: 8, flex: 1, fontWeight: '500' },
   industryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },

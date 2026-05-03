@@ -48,6 +48,49 @@ const paymentService = {
       console.error('[paymentService] Error fetching transaction status:', error);
       throw error;
     }
+  },
+
+  /**
+   * Fetch investor packages.
+   * GET /api/payments/packages/investor
+   */
+  getInvestorPackages: async () => {
+    try {
+      const response = await apiClient.get('/api/payments/packages/investor');
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error fetching investor packages:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch startup packages.
+   * GET /api/payments/packages/startup
+   */
+  getStartupPackages: async () => {
+    try {
+      const response = await apiClient.get('/api/payments/packages/startup');
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error fetching startup packages:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Checkout subscription
+   * POST /api/payments/subscriptions/checkout
+   * @param {number} packageId
+   */
+  checkoutSubscription: async (packageId) => {
+    try {
+      const response = await apiClient.post('/api/payments/subscriptions/checkout', { packageId });
+      return response?.data ?? response;
+    } catch (error) {
+      console.error('[paymentService] Error in checkout subscription:', error);
+      throw error;
+    }
   }
 };
 

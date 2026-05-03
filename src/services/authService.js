@@ -16,6 +16,8 @@ export const authService = {
       password: data.password,
       confirmPassword: data.confirmPassword,
       role: 0, // Strictly Startup role for Mobile
+      isTermsAccepted: data.isTermsAccepted || false,
+      termsVersion: data.termsVersion || 'v1.0'
     };
 
     const response = await apiClient.post('/api/Auth/register', payload);

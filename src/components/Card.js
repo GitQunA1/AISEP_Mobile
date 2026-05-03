@@ -10,21 +10,24 @@ const Card = ({ children, style, variant = 'default', onPress }) => {
 
   const cardStyles = StyleSheet.create({
     card: {
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
       borderRadius: radius.lg,
       padding: activeTheme.spacing.md,
       ...shadows.sm,
     },
     default: {
-      borderWidth: 1,
-      borderColor: colors.border,
+      borderWidth: activeTheme.isDark ? 1 : 0.5,
+      borderColor: activeTheme.isDark ? colors.border : colors.border + '40',
     },
     elevated: {
       ...shadows.md,
+      borderWidth: 0,
     },
     flat: {
       borderWidth: 0,
-      backgroundColor: colors.secondaryBackground,
+      backgroundColor: activeTheme.isDark ? colors.mutedBackground : colors.secondaryBackground,
+      ...shadows.sm,
+      shadowOpacity: activeTheme.isDark ? 0 : 0.05,
     }
   });
 

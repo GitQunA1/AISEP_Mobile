@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, Animated, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
+import { useNotifications } from '../../context/NotificationContext';
 import TabIcon from './TabIcon';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -11,6 +12,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
+  const { unreadCount } = useNotifications();
   
   const numTabs = state.routes.length;
   const tabWidth = SCREEN_WIDTH / numTabs;
@@ -92,6 +94,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                 size={22}
                 label={label}
                 focused={isFocused}
+                badgeCount={route.name === 'notifications' ? unreadCount : 0}
               />
             </Pressable>
           );

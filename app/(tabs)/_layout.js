@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Home, MessageSquare, Users, User, LayoutDashboard, Target } from "lucide-react-native";
+import { Home, MessageSquare, Users, User, LayoutDashboard, Target, Bell } from "lucide-react-native";
 import { useAuth } from "../../src/context/AuthContext";
 import { useTheme } from "../../src/context/ThemeContext";
 import CustomTabBar from "../../src/components/navigation/CustomTabBar";
@@ -59,6 +59,15 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <LayoutDashboard size={24} color={color} />,
           headerTitle: "Bảng điều khiển",
           href: user ? "/dashboard" : null,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "Thông báo",
+          tabBarIcon: ({ color }) => <Bell size={24} color={color} />,
+          headerTitle: "Thông báo của tôi",
+          href: user ? "/notifications" : null,
         }}
       />
       <Tabs.Screen

@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Dimensions, Image, Modal, Platform } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ExpoLinking from 'expo-linking';
+import { Lock, Zap, Brain, Sparkles, Crown } from 'lucide-react-native';
 
 import projectSubmissionService from '../../src/services/projectSubmissionService';
 import startupProfileService from '../../src/services/startupProfileService';
 import AIEvaluationService from '../../src/services/AIEvaluationService';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
+import QuotaGuardModal from '../../src/components/common/QuotaGuardModal';
+import AIEvaluationModal from '../../src/components/common/AIEvaluationModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -22,20 +26,36 @@ export default function StartupDetailScreen() {
   const { activeTheme, isDark } = useTheme();
   const colors = activeTheme.colors;
   const { user } = useAuth();
+  const { subscription, quota, isPremium, startupProfile, refreshSubscription } = useSubscription();
+
+  const roleStr = String(user?.role || '').toLowerCase();
+  const isInvestor = user && (roleStr === 'investor' || user.role === 1);
+  const isStartupUser = user && (roleStr === 'startup' || user.role === 0);
+  const bypassRole = ['staff', 'operationstaff', 'advisor', 'admin'].includes(roleStr) || [2, 3, 4, 5].includes(user?.role);
+  const isEligible = isInvestor || isStartupUser;
 
   const [project, setProject] = useState(null);
+  const [isManualUnlocked, setIsManualUnlocked] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [aiHistory, setAiHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Quota Guard Modal state
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [showAIResultModal, setShowAIResultModal] = useState(false);
+
   // Hide tab bar and default header
   useEffect(() => {
     navigation.setOptions({
       headerShown: false,
     });
-    
+
     // Hide parent tab bar if it exists
     const parentNav = navigation.getParent();
     if (parentNav) {
@@ -58,52 +78,40 @@ export default function StartupDetailScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      const isInvestorOrPremium = user && (user.role === 'investor' || user.role === 'Investor' || String(user.role) === '1');
-      const fetchMethod = isInvestorOrPremium 
-          ? projectSubmissionService.getProjectById(id)
-          : projectSubmissionService.getProjectNonPremiumById(id);
-          
+
+
+      // Always start with non-premium endpoint, then check if we should fetch full
       const [pRes, dRes, aRes] = await Promise.all([
-          fetchMethod,
-          projectSubmissionService.getDocuments(id).catch(() => null),
-          AIEvaluationService.getProjectAnalysisHistory(id).catch(() => null)
+        projectSubmissionService.getProjectNonPremiumById(id),
+        projectSubmissionService.getDocuments(id).catch(() => null),
+        AIEvaluationService.getProjectAnalysisHistory(id).catch(() => null)
       ]);
 
       if (pRes?.success && pRes?.data) {
-        const d = pRes.data;
-        
-        // Ownership check
-        if (user && (user.role === 'startup' || user.role === 'Startup' || String(user.role) === '2')) {
-          try {
-            const meRes = await startupProfileService.getStartupProfileByUserId(user.userId);
-            if (meRes && d.startupId === meRes.id) {
-              setIsOwner(true);
-              // If owner, fetch full details if not already fetched
-              if (!isInvestorOrPremium) {
-                const fullRes = await projectSubmissionService.getProjectById(id);
-                if (fullRes?.success && fullRes.data) {
-                  setProject({
-                    ...fullRes.data,
-                    name: fullRes.data.projectName || 'Dự án',
-                    stage: fullRes.data.developmentStage || 'Ý tưởng',
-                    status: fullRes.data.status || 'Pending',
-                    tags: fullRes.data.keySkills ? fullRes.data.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
-                  });
-                  return;
-                }
-              }
-            }
-          } catch (e) {
-            console.log('Error checking ownership:', e);
-          }
+        let projectData = pRes.data;
+        let ownerConfirmed = false;
+
+        // Startup ownership check
+        if (isStartupUser && startupProfile && projectData.startupId === startupProfile.id) {
+          ownerConfirmed = true;
+          setIsOwner(true);
+        }
+
+        // Fetch full data if owned, already unlocked, or user is a bypass role (Staff/Admin/Advisor)
+        // Note: For regular Investors/Startups, they must unlock first unless they already did.
+        const shouldFetchFull = ownerConfirmed || projectData.isUnlockedByCurrentUser || isManualUnlocked || bypassRole;
+
+        if (shouldFetchFull) {
+          const fullRes = await projectSubmissionService.getProjectById(id);
+          if (fullRes?.success && fullRes.data) projectData = fullRes.data;
         }
 
         setProject({
-          ...d,
-          name: d.projectName || 'Dự án',
-          stage: d.developmentStage || 'Ý tưởng',
-          status: d.status || 'Pending',
-          tags: d.keySkills ? d.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
+          ...projectData,
+          name: projectData.projectName || 'Dự án',
+          stage: projectData.developmentStage || 'Ý tưởng',
+          status: projectData.status || 'Pending',
+          tags: projectData.keySkills ? projectData.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
         });
       } else {
         setError(pRes?.message || 'Không tìm thấy thông tin dự án.');
@@ -123,7 +131,7 @@ export default function StartupDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [id, user]);
+  }, [id, user, isManualUnlocked]);
 
   useEffect(() => {
     loadProjectDetail();
@@ -135,6 +143,66 @@ export default function StartupDetailScreen() {
       Alert.alert('Lỗi', 'Không thể mở tài liệu này');
     });
   };
+
+  // Unlock project - consumes 1 project view quota
+  const handleUnlockProject = async () => {
+    setIsUnlocking(true);
+    try {
+      const res = await projectSubmissionService.getProjectById(id);
+      if (res?.success && res?.data) {
+        const d = res.data;
+        setIsManualUnlocked(true);
+        setProject({
+          ...d,
+          name: d.projectName || 'Dự án',
+          stage: d.developmentStage || 'Ý tưởng',
+          status: d.status || 'Pending',
+          tags: d.keySkills ? d.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
+        });
+        setShowUnlockModal(false);
+        refreshSubscription(); // Refresh quota after consuming
+        
+        // Silently reload to ensure all documents and history are updated with full access
+        loadProjectDetail();
+      } else {
+        Alert.alert('Lỗi', res?.message || 'Không thể mở khóa dự án này.');
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Lỗi khi mở khóa dự án.';
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  // AI Analyze - consumes 1 AI request quota
+  const handleAIAnalyze = async () => {
+    setIsAnalyzingAI(true);
+    try {
+      const res = await AIEvaluationService.analyzeProjectAPI(id);
+      if (res.success && res.data) {
+        setAiResult(res.data);
+        setShowAIModal(false);
+        setShowAIResultModal(true);
+        refreshSubscription();
+        // Reload AI history
+        const hRes = await AIEvaluationService.getProjectAnalysisHistory(id);
+        if (hRes?.data) setAiHistory(hRes.data);
+      } else {
+        Alert.alert('Lỗi AI', res.message || 'Có lỗi xảy ra khi thực hiện phân tích AI.');
+      }
+    } catch (err) {
+      Alert.alert('Lỗi', err?.message || 'Không thể kết nối với hệ thống AI.');
+    } finally {
+      setIsAnalyzingAI(false);
+    }
+  };
+
+  // Determine if current user is Startup role (for unlock/AI logic)
+  const isAlreadyUnlocked = project?.isUnlockedByCurrentUser || isOwner || isManualUnlocked || bypassRole;
+  // isPremiumUnlockable: user has a paid subscription AND has remaining views
+  const canUnlock = isEligible && isPremium && quota.remainingProjectViews > 0 && !isAlreadyUnlocked;
+  const canAIAnalyze = isEligible && isPremium && quota.remainingAiRequests > 0;
 
   if (isLoading) {
     return (
@@ -159,13 +227,18 @@ export default function StartupDetailScreen() {
     );
   }
 
-  const AVATAR_PALETTE = ['#E05252','#E07D52','#7B52E0','#52C07B','#C05290','#4A90D9','#D4A017'];
+  const AVATAR_PALETTE = ['#E05252', '#E07D52', '#7B52E0', '#52C07B', '#C05290', '#4A90D9', '#D4A017'];
   const getAvatarColor = (name) => {
     const hash = [...(name || '')].reduce((a, c) => a + c.charCodeAt(0), 0);
     return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
   };
 
-  const formatCurrency = (n) => n?.toLocaleString('vi-VN') ?? '0';
+  const formatCurrency = (n) => {
+    if (!n) return '0 đ';
+    if (n >= 1000000000) return `${(n / 1000000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} Tỷ VND`;
+    if (n >= 1000000) return `${(n / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} Tr VND`;
+    return `${n.toLocaleString('vi-VN')} VND`;
+  };
   const formatDate = (iso) => {
     if (!iso) return '—';
     const d = new Date(iso);
@@ -181,18 +254,22 @@ export default function StartupDetailScreen() {
     </Text>
   );
 
-  const PremiumLock = () => (
-    <View style={{
-      flexDirection: 'row', alignItems: 'center', gap: 5,
-      backgroundColor: isDark ? '#3D2B00' : '#FFF9E6',
-      paddingHorizontal: 10, paddingVertical: 6,
-      borderRadius: 6, alignSelf: 'flex-start',
-      borderWidth: isDark ? 0 : 1,
-      borderColor: isDark ? 'transparent' : '#FEF3C7',
-    }}>
+  const PremiumBadge = ({ onPress }) => (
+    <TouchableOpacity 
+      activeOpacity={0.7}
+      onPress={onPress || (() => setShowUnlockModal(true))}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 5,
+        backgroundColor: isDark ? '#3D2B00' : '#FFF9E6',
+        paddingHorizontal: 10, paddingVertical: 6,
+        borderRadius: 6, alignSelf: 'flex-start',
+        borderWidth: isDark ? 0 : 1,
+        borderColor: isDark ? 'transparent' : '#FEF3C7',
+      }}
+    >
       <Ionicons name="lock-closed" size={13} color={isDark ? '#F5A623' : '#B45309'} />
-      <Text style={{ fontSize: 12, color: isDark ? '#F5A623' : '#B45309', fontWeight: '800' }}>PREMIUM</Text>
-    </View>
+      <Text style={{ fontSize: 12, color: isDark ? '#F5A623' : '#B45309', fontWeight: '800' }}>{isPremium ? 'MỞ KHÓA NGAY' : 'PREMIUM'}</Text>
+    </TouchableOpacity>
   );
 
   const Divider = () => (
@@ -204,7 +281,7 @@ export default function StartupDetailScreen() {
       backgroundColor: colors.mutedBackground || (isDark ? '#111827' : '#F8FAFC'),
       borderRadius: 12,
       marginHorizontal: 16,
-      marginBottom: 12,
+      marginBottom: 16,
       overflow: 'hidden',
       ...(hasBorderAccent && {
         borderWidth: 1,
@@ -230,8 +307,8 @@ export default function StartupDetailScreen() {
   );
 
   const STAGE_CONFIG = {
-    Idea:   { color: '#F5A623', bg: isDark ? '#3D2B00' : '#FFF9E6', icon: 'bulb-outline' },
-    MVP:    { color: '#2D7EFF', bg: isDark ? '#002B4D' : '#EBF5FF', icon: 'rocket-outline' },
+    Idea: { color: '#F5A623', bg: isDark ? '#3D2B00' : '#FFF9E6', icon: 'bulb-outline' },
+    MVP: { color: '#2D7EFF', bg: isDark ? '#002B4D' : '#EBF5FF', icon: 'rocket-outline' },
     Growth: { color: '#27AE60', bg: isDark ? '#003D1A' : '#E6FFFA', icon: 'trending-up-outline' },
   };
 
@@ -249,27 +326,29 @@ export default function StartupDetailScreen() {
     );
   };
 
-  const TwoColumnRow = ({ left, right }) => (
-    <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
-      {[left, right].map((col, i) => (
-        <View key={i} style={{ flex: 1 }}>
-          <FieldLabel>{col.label}</FieldLabel>
-            <Text style={{ fontSize: 13.5, color: col.value ? colors.text : colors.secondaryText, lineHeight: 19 }}>
-              {isOwner ? (col.value || '—') : (col.isPremium ? <PremiumLock /> : (col.value || '—'))}
-            </Text>
-        </View>
-      ))}
+  const DetailRow = ({ label, value, isPremium: fieldIsPremium }) => (
+    <View style={{ marginBottom: 16 }}>
+      <FieldLabel>{label}</FieldLabel>
+      <View>
+        {isAlreadyUnlocked || !fieldIsPremium ? (
+          <Text style={{ fontSize: 14.5, color: value ? colors.text : colors.secondaryText, lineHeight: 22 }}>
+            {value || '—'}
+          </Text>
+        ) : (
+          <PremiumBadge />
+        )}
+      </View>
     </View>
   );
 
   if (!user) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-        <View style={{ 
-          width: 80, height: 80, borderRadius: 40, 
-          backgroundColor: colors.primary + '15', 
+        <View style={{
+          width: 80, height: 80, borderRadius: 40,
+          backgroundColor: colors.primary + '15',
           justifyContent: 'center', alignItems: 'center',
-          marginBottom: 24 
+          marginBottom: 24
         }}>
           <Ionicons name="lock-closed" size={40} color={colors.primary} />
         </View>
@@ -279,11 +358,11 @@ export default function StartupDetailScreen() {
         <Text style={{ color: colors.secondaryText, fontSize: 15, marginTop: 12, textAlign: 'center', lineHeight: 22 }}>
           Vui lòng đăng nhập hoặc đăng ký tài khoản Startup để xem chi tiết dự án và tài liệu đi kèm.
         </Text>
-        
+
         <TouchableOpacity
           onPress={() => router.push('/(auth)/login')}
-          style={{ 
-            marginTop: 32, backgroundColor: colors.primary, 
+          style={{
+            marginTop: 32, backgroundColor: colors.primary,
             width: '100%', height: 54, borderRadius: 16,
             justifyContent: 'center', alignItems: 'center',
             shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
@@ -304,16 +383,19 @@ export default function StartupDetailScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaView style={{ backgroundColor: colors.background }} edges={['top']} />
+      
       {/* HEADER */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: 8, // Fixed small padding now that we are inside SafeAreaView
-        paddingBottom: 12,
+        paddingVertical: 12,
         backgroundColor: colors.background,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border + '30'
       }}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -351,114 +433,106 @@ export default function StartupDetailScreen() {
       >
         {/* HERO SECTION */}
         <LinearGradient
-          colors={isDark ? ['#0D3D3D', '#0a1628', colors.background] : ['#E6FFFA', '#F0F9FF', colors.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 }}
+          colors={isDark 
+            ? [colors.primary + '30', colors.background] 
+            : [colors.primary + '10', colors.background]
+          }
+          style={{ paddingHorizontal: 20, paddingTop: 32, paddingBottom: 40 }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
             <View style={{
-              width: 72, height: 72, borderRadius: 36,
-              backgroundColor: getAvatarColor(project.startupCompanyName || project.name),
+              width: 84, height: 84, borderRadius: 24,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
               justifyContent: 'center', alignItems: 'center',
-              shadowColor: getAvatarColor(project.startupCompanyName || project.name),
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: isDark ? 0.6 : 0.25,
-              shadowRadius: 12,
-              elevation: 8,
+              borderWidth: 1, borderColor: colors.border + '50',
+              ...Platform.select({
+                ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 16 },
+                android: { elevation: 6 }
+              })
             }}>
               {project.startupLogoUrl ? (
-                <Image source={{ uri: project.startupLogoUrl }} style={{ width: '100%', height: '100%', borderRadius: 36 }} />
+                <Image source={{ uri: project.startupLogoUrl }} style={{ width: '100%', height: '100%', borderRadius: 24 }} />
               ) : (
-                <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>
-                  {(project.startupCompanyName || project.name).charAt(0).toUpperCase()}
-                </Text>
+                <View style={{
+                  width: '100%', height: '100%', borderRadius: 24,
+                  backgroundColor: getAvatarColor(project.startupCompanyName || project.name),
+                  justifyContent: 'center', alignItems: 'center'
+                }}>
+                  <Text style={{ fontSize: 32, fontWeight: '900', color: '#fff' }}>
+                    {(project.startupCompanyName || project.name).charAt(0).toUpperCase()}
+                  </Text>
+                </View>
               )}
             </View>
-            <Text style={{ fontSize: 24, fontWeight: '900', color: colors.text, flex: 1 }}>
-              {project.name}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: colors.text, marginBottom: 4 }}>
+                {project.name}
+              </Text>
+              <Text style={{ fontSize: 14, color: colors.secondaryText, fontWeight: '500' }}>
+                {project.startupCompanyName || 'Công ty khởi nghiệp'}
+              </Text>
+            </View>
           </View>
         </LinearGradient>
 
-        {/* STATS ROW */}
-        <View style={{
-          flexDirection: 'row',
-          backgroundColor: colors.mutedBackground || (isDark ? '#111827' : '#F8FAFC'),
-          borderRadius: 12,
-          marginHorizontal: 16,
-          marginBottom: 16,
-          overflow: 'hidden',
-          marginTop: -10,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}>
+        <View style={{ gap: 12, marginHorizontal: 16, marginBottom: 28 }}>
           {[
             {
-              icon: <Ionicons name="logo-usd" size={22} color={colors.primary} />,
+              icon: <Ionicons name="logo-usd" size={18} color={colors.primary} />,
               label: 'DOANH THU',
-              isPremium: project.revenue === undefined,
-              value: project.revenue ? formatCurrency(project.revenue) : null,
+              isPremium: true,
+              value: formatCurrency(project.revenue),
+              color: colors.primary
             },
             {
-              icon: <Ionicons name="bar-chart-outline" size={22} color="#27AE60" />,
+              icon: <Ionicons name="bar-chart-outline" size={18} color="#27AE60" />,
               label: 'THỊ TRƯỜNG',
-              isPremium: project.marketSize === undefined,
-              value: project.marketSize ? formatCurrency(project.marketSize) : null,
+              isPremium: true,
+              value: formatCurrency(project.marketSize),
+              color: '#27AE60'
             },
             {
-              icon: <Ionicons name="flash" size={22} color="#F5A623" />,
+              icon: <Ionicons name="flash" size={18} color="#F5A623" />,
               label: 'ĐIỂM AI',
               isPremium: false,
-              value: project.startupPotentialScore || project.aiScore,
-              emptyText: 'Chưa có',
+              value: project.startupPotentialScore || project.aiScore || '—',
+              color: '#F5A623'
             },
-          ].map((stat, index, arr) => (
-            <React.Fragment key={stat.label}>
-              <View style={{
-                flex: 1,
-                alignItems: 'center',
-                paddingVertical: 20,
-                paddingHorizontal: 8,
-              }}>
-                {stat.icon}
-                <View style={{ marginTop: 8, alignItems: 'center' }}>
-                  {isOwner ? (
-                    <Text style={{ fontSize: 18, fontWeight: '800', color: index === 2 ? '#F5A623' : colors.text, marginBottom: 4 }}>
-                      {stat.value || '—'}
-                    </Text>
-                  ) : stat.isPremium ? (
-                      <View style={{
-                        flexDirection: 'row', alignItems: 'center', gap: 4,
-                        backgroundColor: isDark ? '#3D2B00' : '#FFF9E6',
-                        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-                        marginBottom: 6,
-                        borderWidth: isDark ? 0 : 1,
-                        borderColor: isDark ? 'transparent' : '#FEF3C7',
-                      }}>
-                        <Ionicons name="lock-closed" size={11} color={isDark ? '#F5A623' : '#B45309'} />
-                        <Text style={{ fontSize: 11, color: isDark ? '#F5A623' : '#B45309', fontWeight: '700' }}>
-                          Premium
-                        </Text>
-                      </View>
-                  ) : stat.value != null ? (
-                    <Text style={{ fontSize: 18, fontWeight: '800', color: index === 2 ? '#F5A623' : colors.text, marginBottom: 4 }}>
+          ].map((stat, index) => (
+            <View key={index} style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
+              paddingHorizontal: 16, paddingVertical: 16, borderRadius: 20,
+              borderWidth: 1, borderColor: colors.border + '40',
+              ...Platform.select({
+                ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
+                android: { elevation: 2 }
+              })
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                <View style={{ 
+                  width: 38, height: 38, borderRadius: 12, 
+                  backgroundColor: stat.color + '15', 
+                  justifyContent: 'center', alignItems: 'center' 
+                }}>
+                  {stat.icon}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.secondaryText, letterSpacing: 1, marginBottom: 4 }}>
+                    {stat.label}
+                  </Text>
+                  {isOwner || isAlreadyUnlocked || !stat.isPremium ? (
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: stat.color }} numberOfLines={1}>
                       {stat.value}
                     </Text>
                   ) : (
-                    <Text style={{ fontSize: 13, color: colors.secondaryText, marginBottom: 6 }}>
-                      {stat.emptyText}
-                    </Text>
+                    <View style={{ width: 100 }}>
+                      <PremiumBadge onPress={() => setShowUnlockModal(true)} />
+                    </View>
                   )}
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.secondaryText, letterSpacing: 1 }}>
-                    {stat.label}
-                  </Text>
                 </View>
               </View>
-              {index < arr.length - 1 && (
-                <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 16 }} />
-              )}
-            </React.Fragment>
+            </View>
           ))}
         </View>
 
@@ -474,16 +548,8 @@ export default function StartupDetailScreen() {
           <FieldLabel>GIAI ĐOẠN PHÁT TRIỂN</FieldLabel>
           <StageBadge stage={project.stage} />
 
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-            <View style={{ flex: 1 }}>
-              <FieldLabel>VẤN ĐỀ CẦN GIẢI QUYẾT</FieldLabel>
-              <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.problemStatement || '—'}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <FieldLabel>GIẢI PHÁP ĐỀ XUẤT</FieldLabel>
-              <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.solutionDescription || project.proposedSolution || '—'}</Text>
-            </View>
-          </View>
+          <DetailRow label="VẤN ĐỀ CẦN GIẢI QUYẾT" value={project.problemStatement} />
+          <DetailRow label="GIẢI PHÁP ĐỀ XUẤT" value={project.solutionDescription || project.proposedSolution} />
         </SectionCard>
 
         {/* HÌNH ẢNH DỰ ÁN */}
@@ -493,15 +559,15 @@ export default function StartupDetailScreen() {
           accentColor={colors.primary}
         >
           {project.projectImageUrl ? (
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
                 // Potential fullscreen view logic
               }}
               style={{ borderRadius: 12, overflow: 'hidden', height: 180, width: '100%', backgroundColor: colors.mutedBackground }}
             >
-              <Image 
-                source={{ uri: project.projectImageUrl }} 
+              <Image
+                source={{ uri: project.projectImageUrl }}
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="cover"
               />
@@ -520,48 +586,85 @@ export default function StartupDetailScreen() {
           title="ĐỘI NGŨ"
           accentColor="#A78BFA"
         >
-          {isOwner ? (
-             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.teamMembers || '—'}</Text>
-          ) : project.teamMembers ? (
-             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.teamMembers}</Text>
-          ) : (
-            <PremiumLock />
-          )}
-          <Divider />
-          <FieldLabel>KỸ NĂNG CỐT LÕI</FieldLabel>
-          {isOwner ? (
-             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.keySkills || '—'}</Text>
-          ) : project.keySkills ? (
-             <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.keySkills}</Text>
-          ) : (
-            <PremiumLock />
-          )}
+          <DetailRow label="THÀNH VIÊN" value={project.teamMembers} isPremium />
+          <DetailRow label="KỸ NĂNG CỐT LÕI" value={project.keySkills} />
         </SectionCard>
+
+        {/* ACTION BUTTONS: Unlock (for Investor/Startup users) */}
+        {isEligible && !isOwner && !isAlreadyUnlocked && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 16, gap: 10 }}>
+            {/* Unlock Button */}
+            {!isAlreadyUnlocked && (
+              <TouchableOpacity
+                onPress={() => {
+                  if (!isPremium) {
+                    Alert.alert(
+                      'Tính năng Premium',
+                      'Bạn cần nâng cấp gói dịch vụ để mở khóa thông tin chi tiết của dự án.',
+                      [
+                        { text: 'Hủy', style: 'cancel' },
+                        { text: 'Nâng cấp ngay', onPress: () => router.push('/subscription/management') }
+                      ]
+                    );
+                    return;
+                  }
+                  setShowUnlockModal(true);
+                }}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  backgroundColor: isPremium ? colors.primary : '#f59e0b',
+                  paddingVertical: 13, borderRadius: 14,
+                }}
+              >
+                <Lock size={16} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+                  {isPremium
+                    ? `Mở khóa chi tiết (còn ${quota.remainingProjectViews} lượt)`
+                    : 'Nâng cấp để mở khóa'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+          </View>
+        )}
 
         {/* LỊCH SỬ ĐÁNH GIÁ AI */}
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 12,
+          justifyContent: 'space-between',
           backgroundColor: colors.mutedBackground || (isDark ? '#111827' : '#F8FAFC'),
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginBottom: 12,
+          marginBottom: 16,
           borderWidth: 1,
           borderColor: colors.border,
         }}>
-          <Ionicons name="flash-outline" size={22} color="#F5A623" />
-          <View>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
-              Lịch sử đánh giá AI
-            </Text>
-            <Text style={{ fontSize: 13, color: colors.secondaryText, marginTop: 2 }}>
-              {aiHistory?.length > 0
-                ? `${aiHistory.length} lần đánh giá`
-                : 'Chưa có dữ liệu đánh giá'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="flash-outline" size={22} color="#F5A623" />
+            <View>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
+                Lịch sử đánh giá AI
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.secondaryText, marginTop: 2 }}>
+                {aiHistory?.length > 0
+                  ? `Lần cuối: ${formatDate(aiHistory[0].evaluatedAt || aiHistory[0].createdAt)}`
+                  : 'Chưa có bản đánh giá nào'}
+              </Text>
+            </View>
           </View>
+          {aiHistory?.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                setAiResult(aiHistory[0]);
+                setShowAIResultModal(true);
+              }}
+              style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+            >
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Chi tiết</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* CỐ VẤN CHÍNH THỨC */}
@@ -598,7 +701,7 @@ export default function StartupDetailScreen() {
                   Cố vấn chính thức · {formatCurrency(project.assignedAdvisorHourlyRate)} VND/h
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                   {(project.assignedAdvisorIndustries || []).map((ind) => (
+                  {(project.assignedAdvisorIndustries || []).map((ind) => (
                     <View key={ind} style={{
                       backgroundColor: colors.primary + '15',
                       paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
@@ -621,26 +724,12 @@ export default function StartupDetailScreen() {
           title="THỊ TRƯỜNG & MÔ HÌNH"
           accentColor="#27AE60"
         >
-          <TwoColumnRow
-            left={{ label: 'KHÁCH HÀNG MỤC TIÊU', value: project.targetCustomers || project.customerSegment }}
-            right={{ label: 'GIÁ TRỊ ĐỘC ĐÁO (UVP)', value: project.uniqueValueProposition || project.valueProposition }}
-          />
 
-          <TwoColumnRow
-            left={{ label: 'QUY MÔ THỊ TRƯỜNG', value: project.marketSize ? formatCurrency(project.marketSize) : null, isPremium: project.marketSize === undefined }}
-            right={{ label: 'DOANH THU', value: project.revenue ? formatCurrency(project.revenue) : null, isPremium: project.revenue === undefined }}
+          <DetailRow 
+            label="MÔ HÌNH KINH DOANH" 
+            value={project.businessModel} 
+            isPremium 
           />
-
-          <View style={{ marginTop: 12 }}>
-            <FieldLabel>MÔ HÌNH KINH DOANH</FieldLabel>
-            {isOwner ? (
-               <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.businessModel || '—'}</Text>
-            ) : project.businessModel ? (
-               <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>{project.businessModel}</Text>
-            ) : (
-              <PremiumLock />
-            )}
-          </View>
         </SectionCard>
 
         {/* CẠNH TRANH */}
@@ -649,10 +738,8 @@ export default function StartupDetailScreen() {
           title="CẠNH TRANH"
           accentColor="#E05252"
         >
-          <TwoColumnRow
-            left={{ label: 'KINH NGHIỆM ĐỘI NGŨ', value: project.teamExperience, isPremium: project.teamExperience === undefined }}
-            right={{ label: 'ĐỐI THỦ CẠNH TRANH', value: project.competitors, isPremium: project.competitors === undefined }}
-          />
+          <DetailRow label="KINH NGHIỆM ĐỘI NGŨ" value={project.teamExperience} isPremium />
+          <DetailRow label="ĐỐI THỦ CẠNH TRANH" value={project.competitors} isPremium />
         </SectionCard>
 
         {/* TÀI LIỆU DỰ ÁN */}
@@ -697,7 +784,38 @@ export default function StartupDetailScreen() {
           )}
         </SectionCard>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Quota Guard Modals */}
+      <QuotaGuardModal
+        visible={showUnlockModal}
+        onClose={() => setShowUnlockModal(false)}
+        onConfirm={handleUnlockProject}
+        type="unlock"
+        projectName={project?.name}
+        isProcessing={isUnlocking}
+        isLoadingQuota={false}
+        remaining={quota.remainingProjectViews}
+        packageName={quota.packageName}
+      />
+      <QuotaGuardModal
+        visible={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onConfirm={handleAIAnalyze}
+        type="ai"
+        projectName={project?.name}
+        isProcessing={isAnalyzingAI}
+        isLoadingQuota={false}
+        remaining={quota.remainingAiRequests}
+        packageName={quota.packageName}
+      />
+
+      <AIEvaluationModal
+        visible={showAIResultModal}
+        onClose={() => setShowAIResultModal(false)}
+        data={aiResult}
+        projectName={project?.name}
+      />
+    </View>
   );
 }
 

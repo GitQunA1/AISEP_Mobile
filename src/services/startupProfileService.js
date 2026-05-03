@@ -119,6 +119,19 @@ const startupProfileService = {
       console.error('Error updating startup profile:', error);
       throw error;
     }
+  },
+
+  /**
+   * Fetch the startup profile of the current authenticated user
+   */
+  getStartupMe: async () => {
+    try {
+      const response = await apiClient.get('/api/Startups/me');
+      return response?.data ?? response ?? null;
+    } catch (error) {
+      console.error('Error fetching current startup profile:', error);
+      return null;
+    }
   }
 };
 

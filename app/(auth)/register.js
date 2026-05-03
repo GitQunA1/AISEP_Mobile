@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Rocket, CheckCircle, ArrowLeft } from 'lucide-react-native';
+import { Rocket, CheckCircle, ArrowLeft, CheckSquare, Square } from 'lucide-react-native';
 import authService from '../../src/services/authService';
 import { useTheme } from '../../src/context/ThemeContext';
 import THEME from '../../src/constants/Theme';
 import Button from '../../src/components/Button';
 import Input from '../../src/components/Input';
+import TermsModal from '../../src/components/common/TermsModal';
+import termsService from '../../src/services/termsService';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -24,6 +26,35 @@ export default function RegisterScreen() {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsData, setTermsData] = useState({ version: '', content: '', error: null, isLoading: false });
+
+  const fetchTerms = async () => {
+    if (termsData.content) return; // Already fetched
+    
+    setTermsData(prev => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const response = await termsService.getActiveTerms();
+      const data = response?.data || response;
+      if (data) {
+        setTermsData({
+          version: data.version || 'v1.0',
+          content: data.contentHtml || '',
+          error: null,
+          isLoading: false
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch terms:', err);
+      setTermsData({
+        version: '',
+        content: '',
+        error: err,
+        isLoading: false
+      });
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -36,6 +67,7 @@ export default function RegisterScreen() {
     if (!formData.email.trim()) newErrors.email = 'Vui lòng nhập email.';
     if (!formData.password || formData.password.length < 8) newErrors.password = 'Mật khẩu tối thiểu 8 ký tự.';
     if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Mật khẩu không khớp.';
+    if (!isTermsAccepted) newErrors.terms = 'Bạn phải đồng ý với điều khoản.';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -44,7 +76,12 @@ export default function RegisterScreen() {
     if (!validate()) return;
     setIsLoading(true);
     try {
-      const response = await authService.register(formData);
+      const payload = {
+        ...formData,
+        isTermsAccepted,
+        termsVersion: termsData.version || 'v1.0'
+      };
+      const response = await authService.register(payload);
       if (response.success) setStep(2);
       else Alert.alert('Lỗi đăng ký', response.message || 'Thất bại.');
     } catch (err) {
@@ -79,7 +116,34 @@ export default function RegisterScreen() {
             <Input label="Email" value={formData.email} onChangeText={v => setFormData({...formData, email: v})} error={errors.email} />
             <Input label="Mật khẩu" value={formData.password} onChangeText={v => setFormData({...formData, password: v})} error={errors.password} secureTextEntry />
             <Input label="Xác nhận" value={formData.confirmPassword} onChangeText={v => setFormData({...formData, confirmPassword: v})} error={errors.confirmPassword} secureTextEntry />
-            <Button title="Tạo tài khoản Startup" onPress={handleRegister} loading={isLoading} style={{marginTop: 20}} />
+
+            {/* Terms and Conditions Checkbox */}
+            <View style={styles.termsContainer}>
+              <TouchableOpacity 
+                style={styles.checkboxTouch} 
+                onPress={() => setIsTermsAccepted(!isTermsAccepted)}
+              >
+                {isTermsAccepted ? (
+                  <CheckSquare size={24} color={colors.primary} />
+                ) : (
+                  <Square size={24} color={colors.secondaryText} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.termsTextContainer}>
+                <Text style={[styles.termsText, { color: colors.text }]}>
+                  Tôi đồng ý với{' '}
+                </Text>
+                <TouchableOpacity onPress={() => {
+                  fetchTerms();
+                  setShowTermsModal(true);
+                }}>
+                  <Text style={[styles.termsLink, { color: colors.primary }]}>Điều khoản sử dụng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {errors.terms && <Text style={{ color: colors.error, fontSize: 12, marginTop: -8, marginBottom: 12, marginLeft: 36 }}>{errors.terms}</Text>}
+
+            <Button title="Tạo tài khoản Startup" onPress={handleRegister} loading={isLoading} style={{marginTop: 10}} />
             
             <View style={styles.loginPrompt}>
               <Text style={[styles.loginText, { color: colors.secondaryText }]}>Đã có tài khoản? </Text>
@@ -89,6 +153,14 @@ export default function RegisterScreen() {
             </View>
           </ScrollView>
         </SafeAreaView>
+        <TermsModal 
+          visible={showTermsModal} 
+          onClose={() => setShowTermsModal(false)}
+          termsContent={termsData.content}
+          termsVersion={termsData.version}
+          error={termsData.error}
+          isLoading={termsData.isLoading}
+        />
       </KeyboardAvoidingView>
     );
   }
@@ -132,5 +204,29 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  checkboxTouch: {
+    padding: 4,
+    marginRight: 4,
+  },
+  termsTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    flexWrap: 'wrap',
+  },
+  termsText: {
+    fontSize: 14,
+  },
+  termsLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

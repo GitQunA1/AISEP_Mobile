@@ -1,8 +1,10 @@
-import { SplashScreen, Stack } from "expo-router";
+import { SplashScreen, Stack, useRouter, useSegments } from "expo-router";
 
 SplashScreen.preventAutoHideAsync();
-import { AuthProvider } from "../src/context/AuthContext";
+import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ThemeProvider, useTheme } from "../src/context/ThemeContext";
+import { SubscriptionProvider } from "../src/context/SubscriptionContext";
+import { NotificationProvider } from "../src/context/NotificationContext";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import { ThemeProvider as NavThemeProvider, DefaultTheme, DarkTheme } from "@react-navigation/native";
@@ -11,6 +13,11 @@ import { StatusBar } from "expo-status-bar";
 
 function RootLayoutNav() {
   const { activeTheme, isDark } = useTheme();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null; // Let the splash screen or index handle loading
+  }
   
   const customTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
@@ -27,11 +34,15 @@ function RootLayoutNav() {
   return (
     <NavThemeProvider value={customTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      {/* Remove initialRouteName and let Expo Router use index.js, but order (tabs) first visually if needed */}
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="startup/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="advisor/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="chat/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+        <Stack.Screen name="subscription/management" options={{ presentation: 'card' }} />
       </Stack>
     </NavThemeProvider>
   );
@@ -48,7 +59,14 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
-      SplashScreen.hideAsync();
+      const hideSplash = async () => {
+        try {
+          await SplashScreen.hideAsync();
+        } catch (e) {
+          console.warn('[RootLayout] SplashScreen.hideAsync failed:', e);
+        }
+      };
+      hideSplash();
     }
   }, [loaded]);
 
@@ -60,7 +78,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <RootLayoutNav />
+          <SubscriptionProvider>
+            <NotificationProvider>
+              <RootLayoutNav />
+            </NotificationProvider>
+          </SubscriptionProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

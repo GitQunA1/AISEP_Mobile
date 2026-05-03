@@ -27,6 +27,9 @@ import ConsultingReportModal from '../booking/ConsultingReportModal';
 import BookingDetailModal from '../booking/BookingDetailModal';
 import BookingChatModal from '../booking/BookingChatModal';
 import chatService from '../../services/chatService';
+import projectSubmissionService from '../../services/projectSubmissionService';
+import DashboardProjectDetail from './DashboardProjectDetail';
+import ReviewModal from '../booking/ReviewModal';
 
 const { width } = Dimensions.get('window');
 
@@ -58,7 +61,12 @@ export default function AdvisorDashboard() {
   const [showChatModal, setShowChatModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [activeChatSession, setActiveChatSession] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [chatLoadingId, setChatLoadingId] = useState(null);
+  const [showProjectDetail, setShowProjectDetail] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [isFetchingProject, setIsFetchingProject] = useState(false);
+  const currentTabIndexRef = useRef(0);
 
   const pagerRef = useRef(null);
   const tabsScrollRef = useRef(null);
@@ -130,20 +138,46 @@ export default function AdvisorDashboard() {
     }
   };
 
-  const handleBookingAction = (type, booking) => {
+  const handleBookingAction = async (type, booking) => {
     if (type === 'chat') handleChat(booking);
     if (type === 'report') {
       setShowDetailModal(false);
       setTimeout(() => setShowReportModal(true), 300);
     }
+    if (type === 'viewProject') {
+      setShowDetailModal(false);
+      const projectId = booking.projectId || booking.ProjectId;
+      if (!projectId) {
+        Alert.alert('Lỗi', 'Thông tin dự án không tồn tại.');
+        return;
+      }
+      
+      setIsFetchingProject(true);
+      try {
+        const res = await projectSubmissionService.getProjectById(projectId);
+        if (res?.data) {
+          setSelectedProject(res.data);
+          setShowProjectDetail(true);
+        } else {
+          Alert.alert('Thông báo', 'Không tìm thấy thông tin dự án này.');
+        }
+      } catch (err) {
+        Alert.alert('Lỗi', 'Không thể tải thông tin dự án.');
+      } finally {
+        setIsFetchingProject(false);
+      }
+    }
+    if (type === 'rate') {
+      setShowReviewModal(true);
+    }
   };
-
   const handleTabChange = (tabId) => {
     if (tabId !== activeTab) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     setActiveTab(tabId);
     const tabIndex = ADVISOR_TABS.findIndex(t => t.id === tabId);
+    currentTabIndexRef.current = tabIndex;
     if (tabIndex !== -1 && pagerRef.current) {
         pagerRef.current.scrollTo({ x: tabIndex * width, animated: true });
     }
@@ -157,7 +191,8 @@ export default function AdvisorDashboard() {
   const handlePagerScroll = (event) => {
     const x = event.nativeEvent.contentOffset.x;
     const tabIndex = Math.round(x / width);
-    if (ADVISOR_TABS[tabIndex] && ADVISOR_TABS[tabIndex].id !== activeTab) {
+    if (tabIndex !== currentTabIndexRef.current && ADVISOR_TABS[tabIndex]) {
+        currentTabIndexRef.current = tabIndex;
         setActiveTab(ADVISOR_TABS[tabIndex].id);
         if (tabsScrollRef.current) {
             const tabWidth = width / 3;
@@ -280,8 +315,7 @@ export default function AdvisorDashboard() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handlePagerScroll}
-        bounces={false}
+        onScroll={handlePagerScroll}
         scrollEventThrottle={16}
       >
         <View style={{ width }}>
@@ -358,6 +392,35 @@ export default function AdvisorDashboard() {
           booking={selectedBooking}
           session={activeChatSession}
         />
+      )}
+
+      {showProjectDetail && selectedProject && (
+        <DashboardProjectDetail
+          visible={showProjectDetail}
+          project={selectedProject}
+          onClose={() => setShowProjectDetail(false)}
+          onRefresh={fetchData}
+        />
+      )}
+
+      {showReviewModal && (
+        <ReviewModal
+          isVisible={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          booking={selectedBooking}
+          viewerRole="Advisor"
+        />
+      )}
+
+      {isFetchingProject && (
+        <Modal transparent visible={isFetchingProject}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+            <Card style={{ padding: 24, borderRadius: 20 }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={{ marginTop: 12, fontWeight: '700', color: colors.text }}>Đang tải dự án...</Text>
+            </Card>
+          </View>
+        </Modal>
       )}
     </View>
   );

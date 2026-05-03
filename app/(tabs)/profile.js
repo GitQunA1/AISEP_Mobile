@@ -15,10 +15,12 @@ import {
   HelpCircle,
   Share2,
   ExternalLink,
-  Award
+  Award,
+  Crown
 } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useSubscription } from '../../src/context/SubscriptionContext';
 import THEME from '../../src/constants/Theme';
 import Button from '../../src/components/Button';
 import Card from '../../src/components/Card';
@@ -35,6 +37,7 @@ export default function ProfileScreen() {
   const { activeTheme, isDark } = useTheme();
   const colors = activeTheme.colors;
   const insets = useSafeAreaInsets();
+  const { startupProfile } = useSubscription();
   const scrollRef = useRef(null);
   useScrollToTop(scrollRef);
 
@@ -52,10 +55,23 @@ export default function ProfileScreen() {
     rating: 0
   });
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [localProfile, setLocalProfile] = useState(null);
 
   useEffect(() => {
     fetchStats();
-  }, [user]);
+    if (!startupProfile && user) {
+      fetchLocalProfile();
+    }
+  }, [user, startupProfile]);
+
+  const fetchLocalProfile = async () => {
+    try {
+      const res = await startupProfileService.getStartupProfileByUserId(user.userId);
+      if (res) setLocalProfile(res);
+    } catch (err) {
+      console.log("Error fetching local profile:", err);
+    }
+  };
 
   const fetchStats = async () => {
     if (!user) return;
@@ -117,8 +133,8 @@ export default function ProfileScreen() {
             <View style={[styles.guestIconContainer, { backgroundColor: colors.secondaryBackground }]}>
               <UserIcon size={64} color={colors.secondaryText} />
             </View>
-            <Text style={[styles.guestTitle, { color: colors.text }]}>Trải nghiệm AISEP</Text>
-            <Text style={[styles.guestSubtitle, { color: colors.secondaryText }]}>
+            <Text allowFontScaling={false} style={[styles.guestTitle, { color: colors.text }]}>Trải nghiệm AISEP</Text>
+            <Text allowFontScaling={false} style={[styles.guestSubtitle, { color: colors.secondaryText }]}>
               Tham gia cộng đồng startup lớn nhất Việt Nam để kết nối với các nhà đầu tư và cố vấn hàng đầu.
             </Text>
             <Button title="Đăng nhập ngay" onPress={() => router.push('/(auth)/login')} style={styles.authBtn} />
@@ -126,7 +142,7 @@ export default function ProfileScreen() {
               style={styles.registerLink}
               onPress={() => router.push('/(auth)/register')}
             >
-              <Text style={[styles.registerText, { color: colors.primary }]}>Chưa có tài khoản? Đăng ký miễn phí</Text>
+              <Text allowFontScaling={false} style={[styles.registerText, { color: colors.primary }]}>Chưa có tài khoản? Đăng ký miễn phí</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -145,8 +161,8 @@ export default function ProfileScreen() {
         {icon}
       </View>
       <View style={styles.menuContent}>
-        <Text style={[styles.menuTitle, { color }]}>{title}</Text>
-        {subtitle && <Text style={[styles.menuSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text>}
+        <Text allowFontScaling={false} style={[styles.menuTitle, { color }]}>{title}</Text>
+        {subtitle && <Text allowFontScaling={false} style={[styles.menuSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text>}
       </View>
       <ChevronRight size={18} color={colors.secondaryText} opacity={0.5} />
     </TouchableOpacity>
@@ -177,23 +193,35 @@ export default function ProfileScreen() {
 
             <View style={styles.profileHeaderContent}>
               <View style={[styles.avatarWrapper, { borderColor: colors.background }]}>
-                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.avatarText}>{(user.name || 'U').charAt(0).toUpperCase()}</Text>
-                </View>
+                {(startupProfile?.logoUrl || startupProfile?.logo || startupProfile?.avatarUrl || startupProfile?.startupLogoUrl || localProfile?.logoUrl || localProfile?.logo) ? (
+                  <Image 
+                    source={{ uri: startupProfile?.logoUrl || startupProfile?.logo || startupProfile?.avatarUrl || startupProfile?.startupLogoUrl || localProfile?.logoUrl || localProfile?.logo }} 
+                    style={styles.avatar} 
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                    <Text allowFontScaling={false} style={styles.avatarText}>
+                      {(startupProfile?.companyName || startupProfile?.startupName || startupProfile?.name || localProfile?.companyName || user.fullName || user.Fullname || user.name || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 <View style={[styles.badgeContainer, { borderColor: colors.background }]}>
-                  <Award size={14} color="#fff" fill="#fff" />
+                  <Award size={12} color="#fff" fill="#fff" />
                 </View>
               </View>
 
               <View style={styles.nameSection}>
                 <View style={styles.titleRow}>
-                  <Text style={[styles.name, { color: colors.text }]}>{user.name}</Text>
-                  <Shield size={18} color={colors.primary} fill={colors.primary + '20'} style={{marginLeft: 8}} />
+                  <Text allowFontScaling={false} style={[styles.name, { color: colors.text }]}>
+                    {startupProfile?.companyName || startupProfile?.startupName || startupProfile?.organizationName || startupProfile?.name || localProfile?.companyName || localProfile?.startupName || user.fullName || user.Fullname || user.name}
+                  </Text>
+                  <Shield size={16} color={colors.primary} fill={colors.primary + '20'} style={{marginLeft: 6}} />
                 </View>
                 <View style={styles.handleRow}>
-                  <Text style={[styles.handle, { color: colors.secondaryText }]}>{handle}</Text>
+                  <Text allowFontScaling={false} style={[styles.handle, { color: colors.secondaryText }]}>{handle}</Text>
                   <View style={[styles.roleLabel, { backgroundColor: colors.primary + '15' }]}>
-                    <Text style={[styles.roleText, { color: colors.primary }]}>{getRoleLabel(user.role)}</Text>
+                    <Text allowFontScaling={false} style={[styles.roleText, { color: colors.primary }]}>{getRoleLabel(user.role)}</Text>
                   </View>
                 </View>
               </View>
@@ -201,25 +229,37 @@ export default function ProfileScreen() {
 
             <Card style={styles.statsCard}>
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.text }]}>
+                <Text allowFontScaling={false} style={[styles.statValue, { color: colors.text }]}>
                   {isLoadingStats ? <ActivityIndicator size="small" color={colors.primary} /> : stats.connections}
                 </Text>
-                <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Kết nối</Text>
+                <Text allowFontScaling={false} style={[styles.statLabel, { color: colors.secondaryText }]}>Kết nối</Text>
               </View>
               
               <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: colors.text }]}>
+                <Text allowFontScaling={false} style={[styles.statValue, { color: colors.text }]}>
                   {isLoadingStats ? <ActivityIndicator size="small" color={colors.primary} /> : stats.projects}
                 </Text>
-                <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Dự án</Text>
+                <Text allowFontScaling={false} style={[styles.statLabel, { color: colors.secondaryText }]}>Dự án</Text>
               </View>
             </Card>
           </View>
 
           {/* Content Section */}
           <View style={styles.mainContent}>
+            <Text style={[styles.sectionHeading, { color: colors.secondaryText }]}>GÓI DỊCH VỤ</Text>
+            <Card style={styles.menuCard}>
+              {renderMenuItem(
+                <Crown size={20} color="#f59e0b" />, 
+                "Gói dịch vụ & Hạn mức", 
+                "Quản lý gói đăng ký và giới hạn sử dụng",
+                () => router.push('/subscription/management'),
+                colors.text,
+                false
+              )}
+            </Card>
+
             <Text style={[styles.sectionHeading, { color: colors.secondaryText }]}>ỨNG DỤNG</Text>
             <Card style={styles.menuCard}>
               {renderMenuItem(
@@ -236,15 +276,22 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }} />
 
           <View style={styles.footerContent}>
-            <Card style={[styles.logoutCard, { backgroundColor: colors.error + '08', borderColor: colors.error + '20' }]}>
-              <TouchableOpacity 
-                style={styles.logoutBtn} 
-                onPress={handleLogout}
-              >
-                <LogOut size={20} color={colors.error} />
-                <Text style={[styles.logoutText, { color: colors.error }]}>Đăng xuất khỏi hệ thống</Text>
-              </TouchableOpacity>
-            </Card>
+            <TouchableOpacity 
+              style={[
+                styles.logoutBtn, 
+                { 
+                  backgroundColor: isDark ? colors.error + '15' : colors.error + '08',
+                  borderColor: colors.error + '30',
+                  borderWidth: 1,
+                  borderRadius: 20,
+                  marginTop: 24
+                }
+              ]} 
+              onPress={handleLogout}
+            >
+              <LogOut size={20} color={colors.error} />
+              <Text style={[styles.logoutText, { color: colors.error }]}>Đăng xuất khỏi hệ thống</Text>
+            </TouchableOpacity>
 
             <View style={styles.versionInfo}>
               <Text style={[styles.versionText, { color: colors.secondaryText }]}>AISEP for Mobile • Phiên bản 1.3.0</Text>
@@ -270,37 +317,37 @@ const styles = StyleSheet.create({
   headerBackground: { ...StyleSheet.absoluteFillObject },
   headerCircle: { position: 'absolute', width: 250, height: 250, borderRadius: 125 },
   profileHeaderContent: { alignItems: 'center', zIndex: 1 },
-  avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 15, elevation: 10 },
-  avatar: { width: '100%', height: '100%', borderRadius: 55, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 44, fontWeight: '900' },
-  badgeContainer: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#f59e0b', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
+  avatarWrapper: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 6 },
+  avatar: { width: '100%', height: '100%', borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 32, fontWeight: '900' },
+  badgeContainer: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#f59e0b', borderRadius: 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   
-  nameSection: { alignItems: 'center', marginTop: 16 },
+  nameSection: { alignItems: 'center', marginTop: 12 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
-  name: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
-  handleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 10 },
-  handle: { fontSize: 15, fontWeight: '600', opacity: 0.6 },
-  roleLabel: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  roleText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  name: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  handleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 },
+  handle: { fontSize: 13, fontWeight: '600', opacity: 0.6 },
+  roleLabel: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  roleText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   
-  statsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, marginTop: 28, borderRadius: 28, width: '100%', backgroundColor: 'rgba(255,255,255,0.02)' },
+  statsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, marginTop: 20, borderRadius: 20, width: '100%', borderWidth: 0 },
   statBox: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 20, fontWeight: '900', marginBottom: 2 },
-  statLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
-  statDivider: { width: 1, height: 30, opacity: 0.1 },
+  statLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.6 },
+  statDivider: { width: 1, height: 24, opacity: 0.3 },
 
-  mainContent: { paddingHorizontal: 20, paddingTop: 10 },
-  sectionHeading: { fontSize: 11, fontWeight: '800', marginLeft: 16, marginBottom: 12, marginTop: 24, letterSpacing: 1.5, opacity: 0.8 },
-  menuCard: { padding: 0, borderRadius: 28, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.01)' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18 },
-  menuIconContainer: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  mainContent: { paddingHorizontal: 20, paddingTop: 4 },
+  sectionHeading: { fontSize: 11, fontWeight: '800', marginLeft: 16, marginBottom: 8, marginTop: 16, letterSpacing: 1.5, opacity: 0.8 },
+  menuCard: { padding: 0, borderRadius: 20, overflow: 'hidden', marginBottom: 4 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 14, paddingHorizontal: 16 },
+  menuIconContainer: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   menuContent: { flex: 1 },
-  menuTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
-  menuSubtitle: { fontSize: 13, marginTop: 3, opacity: 0.6 },
+  menuTitle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  menuSubtitle: { fontSize: 12, marginTop: 2, opacity: 0.6 },
 
-  logoutCard: { marginTop: 32, borderRadius: 24, padding: 0, overflow: 'hidden' },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 60, gap: 12 },
-  logoutText: { fontWeight: '800', fontSize: 16, letterSpacing: -0.3 },
+  logoutCard: { marginTop: 24, borderRadius: 20, padding: 0, overflow: 'hidden' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, gap: 10 },
+  logoutText: { fontWeight: '800', fontSize: 15, letterSpacing: -0.3 },
   
   versionInfo: { alignItems: 'center', marginTop: 32, marginBottom: 20 },
   versionText: { fontSize: 12, fontWeight: '600', opacity: 0.4 },

@@ -90,7 +90,8 @@ apiClient.interceptors.response.use(
       }
 
       // Show native alert and redirect only if not already showing AND not a manual logout
-      if (!isAlertVisible && !apiClient.isManualLogout) {
+      const currentToken = await AsyncStorage.getItem('aisep_token');
+      if (!isAlertVisible && !apiClient.isManualLogout && currentToken) {
         isAlertVisible = true;
 
         // IMMEDIATE EVICTION: Clear tokens now so background requests fail early or see no token

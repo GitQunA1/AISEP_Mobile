@@ -27,7 +27,9 @@ import projectSubmissionService from '../../src/services/projectSubmissionServic
 import startupProfileService from '../../src/services/startupProfileService';
 import SkeletonCard from '../../src/components/feed/SkeletonCard';
 import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
-import { Clock, List, Star, Filter, Check, X, Sparkles, SlidersHorizontal, Plus } from 'lucide-react-native';
+import { useSubscription } from '../../src/context/SubscriptionContext';
+import { Clock, List, Star, Filter, Check, X, Sparkles, SlidersHorizontal, Plus, ArrowUp } from 'lucide-react-native';
+import optionService from '../../src/services/optionService';
 
 const { width, height } = Dimensions.get('window');
 const PAGE_SIZE = 10;
@@ -39,17 +41,9 @@ const SORT_OPTIONS = [
   { key: 'recommended', label: 'Được đề xuất',   icon: Star,  sieve: '-ProjectId' },
 ];
 
-const STAGE_OPTIONS = ['Idea', 'MVP', 'Growth'];
-
-const INDUSTRY_OPTIONS = [
-  'Edtech',
-  'Fintech',
-  'Healthtech',
-  'Agritech',
-  'Ecommerce',
-  'SaaS',
-  'Khác',
-];
+// These will be fallback/initial values if dynamic fetch fails
+const DEFAULT_STAGES = ['Idea', 'MVP', 'Growth'];
+const DEFAULT_INDUSTRIES = ['Edtech', 'Fintech', 'Healthtech', 'Agritech', 'Ecommerce', 'SaaS', 'Khác'];
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
 
@@ -63,6 +57,7 @@ export default function DiscoveryScreen() {
 
   // Animation & Scroll
   const scrollY = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef(null);
 
   // CLAMP SCROLL: This is critical for iOS Pull-To-Refresh. 
   // It forces the animation to ignore negative scroll values during bouncing/refreshing.
@@ -89,7 +84,13 @@ export default function DiscoveryScreen() {
   const [hasMore, setHasMore]             = useState(true);
   const [activeSort, setActiveSort]       = useState('newest');
   const [activeFilters, setActiveFilters] = useState({ stage: [], industry: [] });
+  const { isPremium: hasSub, startupProfile } = useSubscription();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollTopAnim = useRef(new Animated.Value(0)).current;
+  
+  const [dynamicStages, setDynamicStages] = useState([]);
+  const [dynamicIndustries, setDynamicIndustries] = useState([]);
 
   const fetchProjects = async (params) => {
     try {
@@ -145,8 +146,8 @@ export default function DiscoveryScreen() {
           logo: info?.logo || p.startupLogoUrl || p.logoUrl,
           name: p.projectName,
           description: p.shortDescription || 'Chưa có mô tả.',
-          stage: p.developmentStage != null ? (typeof p.developmentStage === 'number' ? STAGE_OPTIONS[p.developmentStage] : p.developmentStage) : 'Idea',
-          industry: p.industry != null ? (typeof p.industry === 'number' ? INDUSTRY_OPTIONS[p.industry] : p.industry) : 'Khác',
+          stage: p.developmentStage ?? 'Idea',
+          industry: p.industry ?? 'Khác',
           aiScore: p.startupPotentialScore ?? null,
           imageUrl: p.projectImageUrl,
           interestedCount: p.followerCount || 0,
@@ -184,7 +185,11 @@ export default function DiscoveryScreen() {
       });
 
       // SMOOTH TRANSITION FROM LOADING TO CONTENT
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      if (Platform.OS === 'android') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } else {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+      }
       
       setProjects(result.data);
       setTotalCount(result.total);
@@ -233,7 +238,21 @@ export default function DiscoveryScreen() {
   }, [activeSort, activeFilters, fetchInitial]);
 
   useEffect(() => {
-    fetchInitial(activeSort);
+    const initData = async () => {
+      fetchInitial(activeSort);
+      try {
+        const [stages, industries] = await Promise.all([
+          optionService.getStages(),
+          optionService.getIndustries()
+        ]);
+        if (stages.length > 0) setDynamicStages(stages.map(s => s.label));
+        if (industries.length > 0) setDynamicIndustries(industries.map(i => i.label));
+      } catch (err) {
+        setDynamicStages(DEFAULT_STAGES);
+        setDynamicIndustries(DEFAULT_INDUSTRIES);
+      }
+    };
+    initData();
   }, []);
 
   const handleSortChange = (key) => {
@@ -251,15 +270,15 @@ export default function DiscoveryScreen() {
   }, [router]);
 
   const renderItem = useCallback(({ item }) => (
-    <View style={{ paddingHorizontal: 16 }}>
-       <StartupCard
-        startup={item}
-        user={user}
-        onViewProject={onViewProject}
-        followedProjectIds={followedProjectIdsSet}
-      />
-    </View>
-  ), [user, onViewProject, followedProjectIdsSet]);
+    <StartupCard
+      startup={item}
+      user={user}
+      onViewProject={onViewProject}
+      followedProjectIds={followedProjectIdsSet}
+      isPremium={hasSub}
+      startupProfileId={startupProfile?.id}
+    />
+  ), [user, onViewProject, followedProjectIdsSet, hasSub, startupProfile?.id]);
 
   const toggleFilter = (type, value) => {
     setActiveFilters(prev => {
@@ -309,10 +328,10 @@ export default function DiscoveryScreen() {
           }
         ]}>
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-            <Text style={{ fontSize: 24, fontWeight: '900', color: colors.text }}>
+            <Text allowFontScaling={false} style={{ fontSize: 24, fontWeight: '900', color: colors.text }}>
               Khám phá dự án
             </Text>
-            <Text style={{ fontSize: 13, color: colors.secondaryText, marginTop: 2 }}>
+            <Text allowFontScaling={false} style={{ fontSize: 13, color: colors.secondaryText, marginTop: 2 }}>
               Khám phá các dự án sáng tạo được hỗ trợ bởi AI
             </Text>
           </View>
@@ -341,7 +360,7 @@ export default function DiscoveryScreen() {
                     }}
                   >
                     <Icon size={16} color={isActive ? colors.primary : colors.secondaryText} style={{ marginRight: 6 }} />
-                    <Text style={{
+                    <Text allowFontScaling={false} style={{
                       fontSize: 13,
                       fontWeight: isActive ? '700' : '500',
                       color: isActive ? colors.primary : colors.secondaryText,
@@ -350,7 +369,7 @@ export default function DiscoveryScreen() {
                     </Text>
                     {isActive && totalCount > 0 && (
                       <View style={{ backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
-                        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
+                        <Text allowFontScaling={false} style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
                           {totalCount}
                         </Text>
                       </View>
@@ -381,7 +400,7 @@ export default function DiscoveryScreen() {
                     minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center',
                     paddingHorizontal: 3, borderWidth: 2, borderColor: colors.background
                   }}>
-                    <Text style={{ color: '#fff', fontSize: 8, fontWeight: 'bold' }}>{activeFilterCount}</Text>
+                    <Text allowFontScaling={false} style={{ color: '#fff', fontSize: 8, fontWeight: 'bold' }}>{activeFilterCount}</Text>
                   </View>
                 )}
               </View>
@@ -390,11 +409,24 @@ export default function DiscoveryScreen() {
         </Animated.View>
 
         <AnimatedFlatList
+          ref={flatListRef}
           data={projects}
           keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
+            { 
+              useNativeDriver: true,
+              listener: (event) => {
+                const y = event.nativeEvent.contentOffset.y;
+                if (y > 400 && !showScrollTop) {
+                  setShowScrollTop(true);
+                  Animated.spring(scrollTopAnim, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
+                } else if (y <= 400 && showScrollTop) {
+                  setShowScrollTop(false);
+                  Animated.timing(scrollTopAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+                }
+              }
+            }
           )}
           scrollEventThrottle={16}
           renderItem={renderItem}
@@ -419,8 +451,8 @@ export default function DiscoveryScreen() {
               progressViewOffset={ACTUAL_HEADER_HEIGHT + 20}
             />
           }
-          contentContainerStyle={{ paddingTop: ACTUAL_HEADER_HEIGHT + 24, paddingBottom: 100 }}
-          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          contentContainerStyle={{ paddingTop: ACTUAL_HEADER_HEIGHT + 42, paddingBottom: 100, paddingHorizontal: 16 }}
+          ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           ListFooterComponent={
             isLoadingMore ? (
               <View style={{ paddingVertical: 20 }}>
@@ -429,7 +461,7 @@ export default function DiscoveryScreen() {
             ) : (!hasMore && projects.length > 0) ? (
               <View style={{ paddingVertical: 30, alignItems: 'center' }}>
                 <View style={{ height: 1, width: 40, backgroundColor: colors.border, marginBottom: 12 }} />
-                <Text style={{ textAlign: 'center', color: colors.secondaryText, fontSize: 12 }}>
+                <Text allowFontScaling={false} style={{ textAlign: 'center', color: colors.secondaryText, fontSize: 12 }}>
                   Đã hiển thị tất cả {projects.length} dự án
                 </Text>
               </View>
@@ -439,8 +471,8 @@ export default function DiscoveryScreen() {
             !isLoading ? (
               <View style={{ alignItems: 'center', paddingTop: 100, paddingHorizontal: 40 }}>
                 <Sparkles size={48} color={colors.primary} style={{ marginBottom: 16, opacity: 0.3 }} />
-                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>Không tìm thấy dự án nào</Text>
-                <Text style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8, textAlign: 'center' }}>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</Text>
+                <Text allowFontScaling={false} style={{ color: colors.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>Không tìm thấy dự án nào</Text>
+                <Text allowFontScaling={false} style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8, textAlign: 'center' }}>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</Text>
               </View>
             ) : (
               <View style={{ paddingTop: 20 }}>
@@ -454,6 +486,45 @@ export default function DiscoveryScreen() {
           }
         />
 
+        {/* SCROLL TO TOP BUTTON */}
+        <Animated.View style={{
+          position: 'absolute',
+          top: ACTUAL_HEADER_HEIGHT + 20,
+          alignSelf: 'center',
+          zIndex: 999,
+          opacity: scrollTopAnim,
+          transform: [{
+            translateY: scrollTopAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-20, 0]
+            })
+          }]
+        }}>
+          <TouchableOpacity
+            onPress={() => {
+              flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            }}
+            activeOpacity={0.9}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.primary,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 20,
+              gap: 8,
+              elevation: 5,
+              shadowColor: colors.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+            }}
+          >
+            <ArrowUp size={16} color="#fff" strokeWidth={3} />
+            <Text allowFontScaling={false} style={{ color: '#fff', fontSize: 13, fontWeight: '800' }}>Lên đầu trang</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
         <Modal
           visible={filterModalVisible}
           transparent={true}
@@ -463,16 +534,16 @@ export default function DiscoveryScreen() {
           <View style={styles.modalBackdrop}>
             <View style={[styles.centeredView, { backgroundColor: colors.mutedBackground || '#111', borderColor: colors.border }]}>
               <View style={styles.modalHeader}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Bộ lọc</Text>
+                <Text allowFontScaling={false} style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>Bộ lọc</Text>
                 <TouchableOpacity onPress={() => setFilterModalVisible(false)} hitSlop={10}>
                   <X size={20} color={colors.secondaryText} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.6 }}>
-                <Text style={styles.filterGroupLabel(colors)}>Giai đoạn</Text>
+                <Text allowFontScaling={false} style={styles.filterGroupLabel(colors)}>Giai đoạn</Text>
                 <View style={styles.chipContainer}>
-                  {STAGE_OPTIONS.map((stage) => {
+                  {(dynamicStages.length > 0 ? dynamicStages : DEFAULT_STAGES).map((stage) => {
                     const isActive = activeFilters.stage.includes(stage);
                     return (
                       <TouchableOpacity
@@ -481,15 +552,15 @@ export default function DiscoveryScreen() {
                         style={[styles.chip(colors), isActive && styles.chipActive(colors)]}
                       >
                         {isActive && <Check size={14} color="#fff" style={{ marginRight: 6 }} />}
-                        <Text style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{stage}</Text>
+                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{stage}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
 
-                <Text style={styles.filterGroupLabel(colors)}>Ngành</Text>
+                <Text allowFontScaling={false} style={styles.filterGroupLabel(colors)}>Ngành</Text>
                 <View style={styles.chipContainer}>
-                  {INDUSTRY_OPTIONS.map((ind) => {
+                  {(dynamicIndustries.length > 0 ? dynamicIndustries : DEFAULT_INDUSTRIES).map((ind) => {
                     const isActive = activeFilters.industry.includes(ind);
                     return (
                       <TouchableOpacity
@@ -498,7 +569,7 @@ export default function DiscoveryScreen() {
                         style={[styles.chip(colors), isActive && styles.chipActive(colors)]}
                       >
                         {isActive && <Check size={14} color="#fff" style={{ marginRight: 6 }} />}
-                        <Text style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{ind}</Text>
+                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{ind}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -507,10 +578,10 @@ export default function DiscoveryScreen() {
 
               <View style={styles.modalFooter}>
                 <TouchableOpacity onPress={clearFilters} style={{ flex: 1, paddingVertical: 12, alignItems: 'center' }}>
-                  <Text style={{ color: colors.secondaryText, fontSize: 14, fontWeight: '600' }}>Xoá tất cả</Text>
+                  <Text allowFontScaling={false} style={{ color: colors.secondaryText, fontSize: 14, fontWeight: '600' }}>Xoá tất cả</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={applyFilters} style={styles.applyBtn(colors)}>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Áp dụng</Text>
+                  <Text allowFontScaling={false} style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Áp dụng</Text>
                 </TouchableOpacity>
               </View>
             </View>

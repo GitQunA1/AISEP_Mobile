@@ -38,48 +38,6 @@ export default function AdvisorCard({ advisor, onViewProfile, onConnect, booking
   };
 
   const renderStatusButton = () => {
-    // 0 = Pending, 1 = Confirmed
-    if (bookingStatus === 0 || bookingStatus === 'Pending') {
-      return (
-        <Animated.View style={[
-          styles.actionBtn, 
-          styles.outlinedBtn, 
-          { borderColor: colors.border, transform: [{ scale: connectScale }] }
-        ]}>
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPressIn={() => handlePressIn(connectScale)}
-            onPressOut={() => handlePressOut(connectScale)}
-            disabled={true}
-            style={styles.innerBtn}
-          >
-            <Clock size={16} color={colors.secondaryText} style={{ marginRight: 6 }} />
-            <Text style={[styles.btnText, { color: colors.secondaryText, fontWeight: '600' }]}>Đang chờ...</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      );
-    }
-    
-    if (bookingStatus === 1 || bookingStatus === 'Confirmed' || bookingStatus === 'Accepted') {
-      return (
-        <Animated.View style={[
-          styles.actionBtn, 
-          { backgroundColor: '#10b981', transform: [{ scale: connectScale }] }
-        ]}>
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPressIn={() => handlePressIn(connectScale)}
-            onPressOut={() => handlePressOut(connectScale)}
-            disabled={true}
-            style={styles.innerBtn}
-          >
-            <CheckCircle size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={[styles.btnText, { color: '#fff' }]}>Đã kết nối</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      );
-    }
-    
     return (
       <Animated.View style={[
         styles.actionBtn, 

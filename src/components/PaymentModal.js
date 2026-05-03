@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
   Image, ActivityIndicator, Dimensions, Platform, 
-  ScrollView 
+  ScrollView
 } from 'react-native';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, CheckCircle, AlertCircle, RefreshCw, 
   QrCode, Clock, Info, Copy 
@@ -104,20 +105,21 @@ export default function PaymentModal({
   const formatPrice = (p) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p);
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <Modal visible={isVisible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <View style={styles.headerInfo}>
-              <Text style={[styles.title, { color: colors.text }]}>Thanh Toán</Text>
-              <Text style={[styles.subtitle, { color: colors.secondaryText }]}>{advisorName} • {slotCount}h</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={15}>
-              <X size={22} color={colors.text} />
-            </TouchableOpacity>
+    <Modal visible={isVisible} animationType="slide" presentationStyle="fullScreen">
+      <SafeAreaView style={[styles.fullContainer, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.title, { color: colors.text }]}>Thanh Toán</Text>
+            <Text style={[styles.subtitle, { color: colors.secondaryText }]}>{advisorName} • {slotCount}h</Text>
           </View>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={15}>
+            <X size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {/* Loading */}
@@ -221,26 +223,18 @@ export default function PaymentModal({
               </FadeInView>
             )}
           </ScrollView>
-        </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  fullContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modal: {
-    height: '85%',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    overflow: 'hidden',
   },
   header: {
-    padding: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

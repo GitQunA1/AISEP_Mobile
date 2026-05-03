@@ -17,10 +17,10 @@ class SignalRService {
     this.appStateSubscription = null;
     
     // Callbacks
-    this.notificationReceived = null;
-    this.chatMessageReceived = null;
-    this.chatSessionClosed = null;
-    this.chatStateChanged = null;
+    this.notificationListeners = new Set();
+    this.chatMessageListeners = new Set();
+    this.chatSessionClosedListeners = new Set();
+    this.chatStateListeners = new Set();
   }
 
   /**
@@ -85,7 +85,7 @@ class SignalRService {
 
     this.notificationConnection.on('notification_received', (notification) => {
       console.log('[SignalRService] Notification received:', notification);
-      if (this.notificationReceived) this.notificationReceived(notification);
+      this.notificationListeners.forEach(cb => cb(notification));
     });
 
     try {
@@ -114,33 +114,33 @@ class SignalRService {
 
     this.chatConnection.on('chat_message_received', (message) => {
       console.log('[SignalRService] Chat message received:', message);
-      if (this.chatMessageReceived) this.chatMessageReceived(message);
+      this.chatMessageListeners.forEach(cb => cb(message));
     });
 
     this.chatConnection.on('chat_session_closed', (sessionId) => {
       console.log('[SignalRService] Chat session closed:', sessionId);
-      if (this.chatSessionClosed) this.chatSessionClosed(sessionId);
+      this.chatSessionClosedListeners.forEach(cb => cb(sessionId));
     });
 
     this.chatConnection.onreconnected(() => {
-      if (this.chatStateChanged) this.chatStateChanged('Connected');
+      this.chatStateListeners.forEach(cb => cb('Connected'));
     });
 
     this.chatConnection.onreconnecting(() => {
-      if (this.chatStateChanged) this.chatStateChanged('Reconnecting');
+      this.chatStateListeners.forEach(cb => cb('Reconnecting'));
     });
 
     this.chatConnection.onclose(() => {
-      if (this.chatStateChanged) this.chatStateChanged('Disconnected');
+      this.chatStateListeners.forEach(cb => cb('Disconnected'));
     });
 
     try {
       await this.chatConnection.start();
       console.log('[SignalRService] ChatHub connected');
-      if (this.chatStateChanged) this.chatStateChanged('Connected');
+      this.chatStateListeners.forEach(cb => cb('Connected'));
     } catch (err) {
       console.error('[SignalRService] ChatHub start failed:', err);
-      if (this.chatStateChanged) this.chatStateChanged('Disconnected');
+      this.chatStateListeners.forEach(cb => cb('Disconnected'));
     }
   }
 
@@ -148,7 +148,7 @@ class SignalRService {
    * Callbacks Registration
    */
   onChatStateChanged(callback) { 
-    this.chatStateChanged = callback; 
+    this.chatStateListeners.add(callback);
     if (this.chatConnection) {
       const stateMap = {
         [signalR.HubConnectionState.Connected]: 'Connected',
@@ -159,10 +159,23 @@ class SignalRService {
       };
       callback(stateMap[this.chatConnection.state] || 'Disconnected');
     }
+    return () => this.chatStateListeners.delete(callback);
   }
-  onNotificationReceived(callback) { this.notificationReceived = callback; }
-  onChatMessageReceived(callback) { this.chatMessageReceived = callback; }
-  onChatSessionClosed(callback) { this.chatSessionClosed = callback; }
+  
+  onNotificationReceived(callback) { 
+    this.notificationListeners.add(callback);
+    return () => this.notificationListeners.delete(callback);
+  }
+  
+  onChatMessageReceived(callback) { 
+    this.chatMessageListeners.add(callback);
+    return () => this.chatMessageListeners.delete(callback);
+  }
+  
+  onChatSessionClosed(callback) { 
+    this.chatSessionClosedListeners.add(callback);
+    return () => this.chatSessionClosedListeners.delete(callback);
+  }
 
   async waitForChatConnection(maxRetries = 20) {
     let retries = 0;
@@ -175,24 +188,29 @@ class SignalRService {
   }
 
   async joinChatSession(sessionId) {
+    if (!sessionId) return;
     const isConnected = await this.waitForChatConnection();
     if (isConnected) {
       try {
+        console.log('[SignalRService] Attempting to join session:', sessionId);
         await this.chatConnection.invoke('JoinSession', sessionId);
-        console.log('[SignalRService] Joined session:', sessionId);
+        console.log('[SignalRService] Joined session successfully:', sessionId);
       } catch (error) {
-        console.error('[SignalRService] JoinSession error:', error);
+        console.warn('[SignalRService] JoinSession error (Non-fatal):', error.message);
+        // We don't throw here to prevent UI crashes, the app might still receive 
+        // messages via direct user targeting if the server supports it.
       }
     }
   }
 
   async leaveChatSession(sessionId) {
+    if (!sessionId) return;
     if (this.chatConnection?.state === signalR.HubConnectionState.Connected) {
       try {
         await this.chatConnection.invoke('LeaveSession', sessionId);
-        console.log('[SignalRService] Left session:', sessionId);
+        console.log('[SignalRService] Left session successfully:', sessionId);
       } catch (error) {
-        console.error('[SignalRService] LeaveSession error:', error);
+        console.warn('[SignalRService] LeaveSession error (Non-fatal):', error.message);
       }
     }
   }
