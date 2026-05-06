@@ -162,9 +162,39 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
   };
 
   const deleteDocument = (id) => {
-    if (project?.status !== 'Draft') return;
-    // UI placeholder for delete - usually requires backend endpoint which might be missing in mockup
-    Alert.alert('Thông báo', 'Tính năng xóa tài liệu đang được phát triển.');
+    if (project?.status !== 'Draft') {
+      Alert.alert('Thông báo', 'Chỉ có thể xóa tài liệu khi dự án ở trạng thái Bản nháp.');
+      return;
+    }
+
+    Alert.alert(
+      'Xác nhận xóa',
+      'Bạn có chắc chắn muốn xóa tài liệu này không?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Xóa', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              const res = await projectSubmissionService.deleteDocument(id);
+              if (res && (res.success || res.isSuccess)) {
+                Alert.alert('Thành công', 'Tài liệu đã được xóa.');
+                loadDocuments();
+              } else {
+                Alert.alert('Lỗi', res?.message || 'Không thể xóa tài liệu.');
+              }
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Lỗi', 'Đã xảy ra lỗi khi kết nối máy chủ.');
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (

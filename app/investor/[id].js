@@ -125,8 +125,8 @@ export default function InvestorDetailScreen() {
           style={styles.hero}
         >
           <View style={[styles.avatarContainer, { backgroundColor: AVATAR_COLOR }]}>
-             {investor.profileImage || investor.avatarUrl ? (
-               <Image source={{ uri: investor.profileImage || investor.avatarUrl }} style={styles.avatarImage} />
+             {investor.profileImageUrl || investor.profileImage || investor.avatarUrl ? (
+               <Image source={{ uri: investor.profileImageUrl || investor.profileImage || investor.avatarUrl }} style={styles.avatarImage} />
              ) : (
                <Text style={styles.avatarText}>{(investor.userName || 'I').charAt(0).toUpperCase()}</Text>
              )}
@@ -135,11 +135,6 @@ export default function InvestorDetailScreen() {
           <Text style={[styles.organization, { color: colors.secondaryText }]}>{investor.organizationName || 'Nhà đầu tư cá nhân'}</Text>
           
           <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.text }]}>{investor.investedProjectsCount || 0}</Text>
-              <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Dự án đã đầu tư</Text>
-            </View>
-            <View style={styles.divider} />
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.text }]}>
                 {investor.investmentAmount ? `${investor.investmentAmount.toLocaleString()} đ` : 'N/A'}
@@ -153,14 +148,14 @@ export default function InvestorDetailScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Chiến lược đầu tư</Text>
           <Text style={[styles.description, { color: colors.secondaryText }]}>
-            {investor.investmentStrategy || 'Nhà đầu tư này chưa cập nhật chiến lược chi tiết.'}
+            {investor.investmentTaste || investor.investmentStrategy || 'Nhà đầu tư này chưa cập nhật chiến lược chi tiết.'}
           </Text>
         </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Lĩnh vực quan tâm</Text>
           <View style={styles.chipContainer}>
-            {(Array.isArray(investor.focusIndustry) ? investor.focusIndustry : (typeof investor.focusIndustry === 'string' ? investor.focusIndustry.split(',') : [])).map((sector, idx) => {
+            {(Array.isArray(investor.industries) ? investor.industries : (typeof investor.focusIndustry === 'string' ? investor.focusIndustry.split(',') : [])).map((sector, idx) => {
               const text = typeof sector === 'string' ? sector.trim() : sector;
               if (!text) return null;
               return (
@@ -169,13 +164,20 @@ export default function InvestorDetailScreen() {
                 </View>
               );
             })}
+            {!investor.industries && !investor.focusIndustry && (
+              <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Chưa cập nhật</Text>
+            )}
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Giai đoạn đầu tư</Text>
           <View style={styles.chipContainer}>
-            {(Array.isArray(investor.preferredStage) ? investor.preferredStage : (typeof investor.preferredStage === 'string' ? investor.preferredStage.split(',') : [])).map((stage, idx) => {
+            {investor.preferredStageOptionId ? (
+              <View style={[styles.chip, { backgroundColor: colors.mutedBackground || '#f0f0f0', borderColor: colors.border }]}>
+                <Text style={[styles.chipText, { color: colors.secondaryText }]}>Giai đoạn {investor.preferredStageOptionId}</Text>
+              </View>
+            ) : (Array.isArray(investor.preferredStage) ? investor.preferredStage : (typeof investor.preferredStage === 'string' ? investor.preferredStage.split(',') : [])).map((stage, idx) => {
               const text = typeof stage === 'string' ? stage.trim() : stage;
               if (!text) return null;
               return (
@@ -184,6 +186,9 @@ export default function InvestorDetailScreen() {
                 </View>
               );
             })}
+            {!investor.preferredStageOptionId && !investor.preferredStage && (
+              <Text style={{ color: colors.secondaryText, fontSize: 14 }}>Chưa cập nhật</Text>
+            )}
           </View>
         </View>
 

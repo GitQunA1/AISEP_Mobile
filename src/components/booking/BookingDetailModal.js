@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   X, Calendar, Clock, User, Briefcase, 
   CreditCard, ChevronRight, MessageSquare, AlertCircle, 
-  FileText, Star, ShieldCheck, Gavel, Info, Search, Sparkles
+  FileText, Star, ShieldCheck, Gavel, Info, Search, Sparkles, Eye
 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import Button from '../Button';

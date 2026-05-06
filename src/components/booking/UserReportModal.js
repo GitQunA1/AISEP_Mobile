@@ -17,13 +17,12 @@ import userReportService from '../../services/userReportService';
 const { width } = Dimensions.get('window');
 
 const REPORT_CATEGORIES = [
-  { value: 'PaymentDispute', label: 'Tranh chấp thanh toán / báo cáo tư vấn' },
   { value: 'UnprofessionalBehavior', label: 'Hành vi thiếu chuyên nghiệp' },
   { value: 'Harassment', label: 'Quấy rối' },
   { value: 'Scam', label: 'Dấu hiệu lừa đảo' },
   { value: 'Impersonation', label: 'Mạo danh' },
   { value: 'InappropriateContent', label: 'Nội dung không phù hợp' },
-  { value: 'Other', label: 'Lý do khác' },
+  { value: 'Other', label: 'Tranh chấp thanh toán / Lý do khác' },
 ];
 
 export default function UserReportModal({ 
@@ -34,7 +33,7 @@ export default function UserReportModal({
 
   const [phase, setPhase] = useState('form'); // form | loading | success | view
   const [form, setForm] = useState({
-    category: 'PaymentDispute',
+    category: 'Other',
     description: '',
     videoEvidenceUrl: '',
   });
@@ -48,7 +47,7 @@ export default function UserReportModal({
       } else {
         setPhase('form');
         setForm({
-          category: 'PaymentDispute',
+          category: 'Other',
           description: '',
           videoEvidenceUrl: '',
         });

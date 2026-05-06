@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, RefreshControl, Dimensions,
-  Animated, Image
+  Animated, Image, Platform
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -18,8 +18,23 @@ import Card from '../Card';
 import projectSubmissionService from '../../services/projectSubmissionService';
 import advisorService from '../../services/advisorService';
 import AdvisorBookingModal from '../AdvisorBookingModal';
+import AIEvaluationService from '../../services/AIEvaluationService';
 import AIEvaluationModal from '../common/AIEvaluationModal';
 import QuotaGuardModal from '../common/QuotaGuardModal';
+import DueDiligenceModal from '../startup/DueDiligenceModal';
+import { 
+  getProjectScorecardFromProject, 
+  getScorecardOptionLabel, 
+  TEAM_SIZE, 
+  TEAM_EXPERIENCE, 
+  TARGET_MARKET_SIZE, 
+  MARKET_GROWTH, 
+  PRODUCT_READINESS, 
+  IP_PROTECTION, 
+  BARRIER_TO_ENTRY, 
+  CURRENT_TRACTION, 
+  RUNWAY_MONTHS 
+} from '../../constants/projectScorecard';
 
 const { width } = Dimensions.get('window');
 
@@ -35,8 +50,16 @@ const getStatusConfig = (status, colors) => {
 };
 
 const getStageLabel = (stage) => {
-  const stages = { 'idea': 'Ý tưởng', 'mvp': 'MVP', 'growth': 'Tăng trưởng' };
-  return stages[stage?.toLowerCase()] || stage || 'Không rõ';
+  const stages = { 
+    'idea': 'Ý tưởng', 
+    'mvp': 'MVP', 
+    'growth': 'Tăng trưởng',
+    '0': 'Ý tưởng',
+    '1': 'MVP',
+    '2': 'Tăng trưởng'
+  };
+  const s = String(stage || '').toLowerCase();
+  return stages[s] || stage || 'Không xác định';
 };
 
 const parseTeamMembers = (text) => {
@@ -66,10 +89,13 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   const [fullData, setFullData] = useState(project);
   const [documents, setDocuments] = useState([]);
   const [aiAnalysis, setAiAnalysis] = useState(null);
-  const [assignedAdvisor, setAssignedAdvisor] = useState(null);
+  const [assignedAdvisors, setAssignedAdvisors] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showAIResultModal, setShowAIResultModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showDueDiligenceModal, setShowDueDiligenceModal] = useState(false);
+
+  const scorecard = getProjectScorecardFromProject(fullData);
 
   const fetchFullDetails = async () => {
     if (!project?.id && !project?.projectId) return;
@@ -77,42 +103,44 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
 
     setIsLoading(true);
     try {
-      // 1. Fetch documents (Required)
+      // 1. Fetch Full Project Object (for scorecard fields)
+      const projRes = await projectSubmissionService.getProjectById(pid);
+      if (projRes?.success || projRes?.isSuccess || projRes?.data) {
+        setFullData(projRes.data || projRes);
+      }
+
+      // 2. Fetch documents
       const docsRes = await projectSubmissionService.getDocuments(pid);
       if (docsRes?.success || docsRes?.isSuccess) {
         const docList = Array.isArray(docsRes.data) ? docsRes.data : (docsRes.data?.items || []);
         setDocuments(docList);
       }
 
-      // 2. Fetch AI Analysis (Optional, might be 404 if not evaluated yet)
+      // 3. Fetch AI Analysis History
       try {
-        const aiRes = await projectSubmissionService.getAIAnalysisResults(pid);
-        if (aiRes?.success || aiRes?.isSuccess) {
-          setAiAnalysis(aiRes.data);
+        const aiRes = await AIEvaluationService.getProjectAnalysisHistory(pid);
+        if (aiRes?.success && aiRes.data?.length > 0) {
+          setAiAnalysis(aiRes.data[0]);
         } else {
           setAiAnalysis(null);
         }
       } catch (aiErr) {
-        console.log('No AI analysis found');
         setAiAnalysis(null);
       }
 
-      // 3. Fetch Advisor Info if assigned
-      const advisorId = fullData.assignedAdvisorId || project.assignedAdvisorId;
-      if (advisorId) {
-        try {
-          const advData = await advisorService.getAdvisorById(advisorId);
-          if (advData) {
-            setAssignedAdvisor(advData);
-          }
-        } catch (advErr) {
-          console.log('Error fetching advisor:', advErr);
+      // 4. Fetch Assigned Advisors (List)
+      try {
+        const advisorRes = await projectSubmissionService.getAssignedAdvisors(pid);
+        const advList = advisorRes.data || advisorRes;
+        if (Array.isArray(advList)) {
+          setAssignedAdvisors(advList);
         }
+      } catch (advErr) {
+        console.log('Error fetching advisors:', advErr);
       }
 
     } catch (error) {
-      // Only log severe errors like network failure or document fetch failure
-      console.error('Error fetching project documents:', error);
+      console.error('Error fetching project details:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -209,8 +237,9 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
       icon: <Lightbulb size={20} color={colors.accentCyan} />,
       accent: colors.accentCyan,
       fields: [
+        { label: 'Lĩnh vực', value: fullData.industries?.join(', ') || fullData.industry || (fullData.industryOption?.value) || 'Chưa xác định', icon: <Briefcase size={14} color={colors.accentCyan} /> },
+        { label: 'Giai đoạn', value: getStageLabel(fullData.stageOptionId ?? fullData.developmentStage ?? fullData.stage), icon: <TrendingUp size={14} color={colors.accentCyan} /> },
         { label: 'Mô tả ngắn', value: fullData.shortDescription || fullData.description },
-        { label: 'Giai đoạn', value: getStageLabel(fullData.developmentStage || fullData.stage), icon: <TrendingUp size={14} color={colors.accentCyan} /> },
         { label: 'Vấn đề', value: fullData.problemStatement || fullData.problemDescription },
         { label: 'Giải pháp', value: fullData.solutionDescription || fullData.proposedSolution || fullData.solution },
       ]
@@ -229,18 +258,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
       ]
     },
     {
-      id: 'team',
-      title: '3. Đội ngũ & Kỹ năng',
-      icon: <Users size={20} color={colors.accentPurple} />,
-      accent: colors.accentPurple,
-      fields: [
-        { label: 'Thành viên & Vai trò', value: fullData.teamMembers || fullData.teamRoles, isTeam: true },
-        { label: 'Kỹ năng cốt lõi', value: fullData.keySkills },
-      ]
-    },
-    {
       id: 'competition',
-      title: '4. Cạnh tranh',
+      title: '3. Cạnh tranh',
       icon: <Zap size={20} color={colors.error} />,
       accent: colors.error,
       fields: [
@@ -254,8 +273,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   const statusConfig = getStatusConfig(fullData.status, colors);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose} statusBarTranslucent={true}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -336,7 +355,13 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 {aiAnalysis ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                     <View style={[styles.scoreCircle, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
-                      <Text style={[styles.scoreValue, { color: colors.primary }]}>{aiAnalysis.potentialScore || aiAnalysis.score}</Text>
+                      <Text 
+                        style={[styles.scoreValue, { color: colors.primary }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {aiAnalysis.potentialScore || aiAnalysis.score}
+                      </Text>
                       <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -366,7 +391,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Cố vấn được phân công</Text>
                 <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600' }}>Hỗ trợ chuyên môn trực tiếp</Text>
               </View>
-              {fullData.status === 'Draft' && assignedAdvisor && (
+              {fullData.status === 'Draft' && assignedAdvisors.length > 0 && (
                 <TouchableOpacity
                   onPress={() => setShowBookingModal(true)}
                   style={[styles.smallActionBtn, { backgroundColor: '#10b981' }]}
@@ -376,16 +401,20 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               )}
             </View>
             <Card style={[styles.sectionCard, { padding: 16, backgroundColor: activeTheme.isDark ? 'rgba(255,255,255,0.05)' : colors.card, borderColor: activeTheme.isDark ? colors.primary + '20' : colors.border + '40' }]}>
-              {assignedAdvisor ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={[styles.miniAvatar, { backgroundColor: colors.primary }]}>
-                    <Text style={styles.miniAvatarText}>{(assignedAdvisor.userName || 'A').charAt(0).toUpperCase()}</Text>
+              {assignedAdvisors && assignedAdvisors.length > 0 ? (
+                assignedAdvisors.map((advisor, index) => (
+                  <View key={advisor.advisorId || index} style={[index > 0 && { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border + '30' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View style={[styles.miniAvatar, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.miniAvatarText}>{(advisor.advisorName || 'A').charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.advisorName, { color: colors.text }]}>{advisor.advisorName}</Text>
+                        <Text style={[styles.advisorExpertise, { color: colors.secondaryText }]}>{advisor.expertise || 'Cố vấn chuyên môn'}</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.advisorName, { color: colors.text }]}>{assignedAdvisor.userName}</Text>
-                    <Text style={[styles.advisorExpertise, { color: colors.secondaryText }]}>{assignedAdvisor.expertise || 'Chuyên gia cố vấn'}</Text>
-                  </View>
-                </View>
+                ))
               ) : (
                 <Text style={{ color: colors.secondaryText, fontSize: 13, fontStyle: 'italic', textAlign: 'center' }}>
                   Dự án đang trong quá trình phân công cố vấn phù hợp.
@@ -406,33 +435,102 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 {section.fields.map((field, fidx) => field.value ? (
                   <View key={fidx} style={[styles.field, fidx === section.fields.length - 1 && styles.noBorder, { borderBottomColor: colors.border + '30' }]}>
                     <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>{field.label}</Text>
-                    {field.isTeam ? (
-                      <View style={styles.teamGrid}>
-                        {parseTeamMembers(field.value).map((member, idx) => (
-                          <View key={idx} style={[styles.teamMemberCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                            <View style={[styles.teamMemberAvatar, { backgroundColor: colors.accentPurple + '20' }]}>
-                              <Users size={16} color={colors.accentPurple} />
-                            </View>
-                            <View style={styles.teamMemberInfo}>
-                              <Text style={[styles.teamMemberName, { color: colors.text }]} numberOfLines={1}>{member.name}</Text>
-                              <Text style={[styles.teamMemberRole, { color: colors.secondaryText }]} numberOfLines={1}>{member.role}</Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <View style={styles.fieldValueRow}>
-                        {field.icon}
-                        <Text style={[styles.fieldValue, { color: colors.text, marginLeft: field.icon ? 6 : 0 }]}>
-                          {field.value}
-                        </Text>
-                      </View>
-                    )}
+                    <View style={styles.fieldValueRow}>
+                      {field.icon}
+                      <Text style={[styles.fieldValue, { color: colors.text, marginLeft: field.icon ? 6 : 0 }]}>
+                        {field.value}
+                      </Text>
+                    </View>
                   </View>
                 ) : null)}
               </Card>
             </View>
           ))}
+
+          {/* PROJECT SCORECARD (Dynamic Team & Metrics) */}
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.iconContainer, { backgroundColor: colors.accentPurple + '25' }]}>
+                <Users size={20} color={colors.accentPurple} />
+              </View>
+              <Text style={[styles.sectionTitle, { color: colors.text, flex: 1 }]} numberOfLines={2}>4. Thông tin đội ngũ & Nguồn lực</Text>
+            </View>
+            <Card style={[styles.sectionCard, { borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: colors.accentPurple, padding: 16 }]}>
+              <View style={styles.scorecardGrid}>
+                {/* Section 1: Team */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Quy mô Đội ngũ</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(TEAM_SIZE, scorecard?.teamSize)}
+                  </Text>
+                </View>
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Kinh nghiệm</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(TEAM_EXPERIENCE, scorecard?.teamExperience)}
+                  </Text>
+                </View>
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Co-founder kỹ thuật</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {scorecard?.hasTechnicalCofounder ? 'Có' : 'Không'}
+                  </Text>
+                </View>
+
+                {/* Section 2: Market */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Quy mô Thị trường</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(TARGET_MARKET_SIZE, scorecard?.targetMarketSize)}
+                  </Text>
+                </View>
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Tốc độ TT</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(MARKET_GROWTH, scorecard?.marketGrowth)}
+                  </Text>
+                </View>
+
+                {/* Section 3: Product & IP */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Sản phẩm</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(PRODUCT_READINESS, scorecard?.productReadiness)}
+                  </Text>
+                </View>
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Bảo vệ SHTT</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(IP_PROTECTION, scorecard?.ipProtection)}
+                  </Text>
+                </View>
+
+                {/* Section 4: Competition */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Rào cản gia nhập</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(BARRIER_TO_ENTRY, scorecard?.barrierToEntry)}
+                  </Text>
+                </View>
+
+                {/* Section 5: Traction */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Tình trạng hiện tại</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(CURRENT_TRACTION, scorecard?.currentTraction)}
+                  </Text>
+                </View>
+
+                {/* Section 6: Runway */}
+                <View style={styles.scorecardItem}>
+                  <Text style={[styles.scorecardLabel, { color: colors.secondaryText }]}>Thời gian duy trì</Text>
+                  <Text style={[styles.scorecardValue, { color: colors.text }]}>
+                    {getScorecardOptionLabel(RUNWAY_MONTHS, scorecard?.runwayMonths)}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </View>
 
           {/* Project Image Detail View (if no hero) */}
           {!fullData.projectImageUrl && (
@@ -460,6 +558,27 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               </View>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>5. Tài liệu & Blockchain</Text>
             </View>
+            {fullData.status === 'Draft' && (
+              <TouchableOpacity
+                onPress={() => setShowDueDiligenceModal(true)}
+                activeOpacity={0.8}
+                style={[styles.dueDiligenceCard, { backgroundColor: colors.primary + '05', borderColor: colors.primary + '20', marginBottom: 16 }]}
+              >
+                <View style={[styles.dueDiligenceIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <Shield size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.dueDiligenceTitle, { color: colors.text }]}>Hồ sơ Thẩm định (Due Diligence)</Text>
+                  <Text style={[styles.dueDiligenceSubtitle, { color: colors.secondaryText }]}>
+                    Điền biểu mẫu và xuất PDF để tăng độ tin cậy cho dự án.
+                  </Text>
+                </View>
+                <View style={[styles.dueDiligenceAction, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.dueDiligenceActionText}>Bắt đầu</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
             <DocumentManager
               project={fullData}
               initialDocuments={documents}
@@ -476,7 +595,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           {
             backgroundColor: colors.card,
             borderTopColor: colors.border,
-            paddingBottom: insets.bottom || 12
+            paddingBottom: Math.max(insets.bottom, 16)
           }
         ]}>
           {fullData.status === 'Draft' && (
@@ -490,7 +609,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               <View style={{ width: 12 }} />
               <Button
                 title="Chỉnh sửa"
-                variant="outline"
+                variant="secondary"
                 onPress={() => { onClose(); onEdit?.(fullData); }}
                 style={styles.footerBtn}
               />
@@ -508,15 +627,22 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
               title="Đóng chi tiết"
               variant="secondary"
               onPress={onClose}
-              style={styles.footerBtn}
+              style={{ flex: 1, height: 50, borderRadius: 14 }}
             />
           )}
         </View>
       </SafeAreaView>
 
+      <DueDiligenceModal
+        visible={showDueDiligenceModal}
+        onClose={() => setShowDueDiligenceModal(false)}
+        project={fullData}
+        onSuccess={fetchFullDetails}
+      />
+
       <AdvisorBookingModal
         isVisible={showBookingModal}
-        advisor={assignedAdvisor}
+        initialProject={fullData}
         onClose={() => setShowBookingModal(false)}
         onSuccess={() => {
           Alert.alert('Thành công', 'Yêu cầu tư vấn của bạn đã được gửi đi.');
@@ -573,7 +699,7 @@ const styles = StyleSheet.create({
   field: { padding: 18, borderBottomWidth: 1 },
   noBorder: { borderBottomWidth: 0 },
   fieldLabel: { fontSize: 11, fontWeight: '800', color: '#71767b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 },
-  fieldValueRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 4 },
+  fieldValueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   fieldValue: { fontSize: 15, fontWeight: '600', lineHeight: 22 },
   teamGrid: { marginTop: 8, gap: 8 },
   teamMemberCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
@@ -602,19 +728,59 @@ const styles = StyleSheet.create({
   smallActionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   smallActionBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   scoreCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
   },
-  scoreValue: { fontSize: 22, fontWeight: '900' },
+  scoreValue: { fontSize: 24, fontWeight: '900', textAlign: 'center', paddingHorizontal: 4 },
   scoreMax: { fontSize: 10, fontWeight: '700', marginTop: -2 },
+  dueDiligenceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    marginTop: 20,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 12
+  },
+  dueDiligenceIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  dueDiligenceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2
+  },
+  dueDiligenceSubtitle: {
+    fontSize: 11,
+    lineHeight: 16
+  },
+  dueDiligenceAction: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10
+  },
+  dueDiligenceActionText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800'
+  },
   aiSummaryTitle: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
   aiSummaryText: { fontSize: 13, lineHeight: 18 },
   miniAvatar: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   miniAvatarText: { color: '#fff', fontSize: 18, fontWeight: '900' },
   advisorName: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
   advisorExpertise: { fontSize: 13, fontWeight: '600' },
+  scorecardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  scorecardItem: { width: '47%', marginBottom: 12, paddingRight: 4 },
+  scorecardLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2, opacity: 0.7 },
+  scorecardValue: { fontSize: 13, fontWeight: '700' },
 });

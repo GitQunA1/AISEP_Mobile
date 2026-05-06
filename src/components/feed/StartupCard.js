@@ -35,8 +35,8 @@ const getAvatarColor = (name) => {
 };
 
 const STAGE_COLORS = {
-  Idea:   { bg: 'rgba(245, 166, 35, 0.12)', text: '#F5A623' },
-  MVP:    { bg: 'rgba(45, 126, 255, 0.12)', text: '#2D7EFF' },
+  Idea: { bg: 'rgba(245, 166, 35, 0.12)', text: '#F5A623' },
+  MVP: { bg: 'rgba(45, 126, 255, 0.12)', text: '#2D7EFF' },
   Growth: { bg: 'rgba(39, 174, 96, 0.12)', text: '#27AE60' },
 };
 
@@ -83,7 +83,7 @@ const PremiumLockText = ({ colors, canUnlock }) => (
 
 const AIScoreBadge = React.memo(({ score, colors }) => {
   const isNull = score === null || score === undefined;
-  
+
   // Default (Updating/Unknown)
   let bgColor = 'rgba(120, 120, 140, 0.12)';
   let textColor = colors.secondaryText;
@@ -107,21 +107,21 @@ const AIScoreBadge = React.memo(({ score, colors }) => {
   }
 
   return (
-    <View style={{ 
-      flexDirection: 'row', 
-      alignItems: 'center', 
-      backgroundColor: bgColor, 
-      paddingHorizontal: 8, 
-      paddingVertical: 4, 
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: bgColor,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: borderColor,
       gap: 6
     }}>
       <Sparkles size={11} color={textColor} fill={textColor} />
-      <Text allowFontScaling={false} style={{ 
-        fontSize: 11, 
-        fontWeight: '900', 
+      <Text allowFontScaling={false} style={{
+        fontSize: 11,
+        fontWeight: '900',
         color: textColor,
         fontVariant: ['tabular-nums']
       }}>
@@ -133,9 +133,9 @@ const AIScoreBadge = React.memo(({ score, colors }) => {
 
 const DetailRows = React.memo(({ project, colors, isUnlocked, isPremium: hasSub }) => {
   const DETAIL_ROWS = [
-    { label: 'Mô hình KD', field: 'businessModel',    isPremium: true  },
-    { label: 'Khách hàng', field: 'targetCustomers',  isPremium: false },
-    { label: 'Giá trị',    field: 'uniqueValueProposition', isPremium: false },
+    { label: 'Mô hình KD', field: 'businessModel', isPremium: true },
+    { label: 'Khách hàng', field: 'targetCustomers', isPremium: false },
+    { label: 'Giá trị', field: 'uniqueValueProposition', isPremium: false },
   ];
 
   return (
@@ -152,11 +152,11 @@ const DetailRows = React.memo(({ project, colors, isUnlocked, isPremium: hasSub 
               allowFontScaling={false}
               numberOfLines={3}
               ellipsizeMode="tail"
-              style={{ 
-                flex: 1, 
-                color: project[field] ? colors.text : colors.secondaryText + '90', 
-                fontSize: 12, 
-                lineHeight: 18 
+              style={{
+                flex: 1,
+                color: project[field] ? colors.text : colors.secondaryText + '90',
+                fontSize: 12,
+                lineHeight: 18
               }}
             >
               {project[field] || 'Chưa cập nhật'}
@@ -213,15 +213,15 @@ const StartupCard = React.memo(({
 
   return (
     <View style={[
-      styles.card, 
-      { 
-        backgroundColor: colors.secondaryBackground || '#111', 
+      styles.card,
+      {
+        backgroundColor: colors.secondaryBackground || '#111',
         borderColor: colors.border,
         borderWidth: 1,
       }
     ]}>
       <TouchableOpacity activeOpacity={0.9} onPress={handleNavigateDetail} style={{ padding: 16 }}>
-        
+
         {/* CARD HEADER */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 }}>
           <View style={[styles.avatar, { backgroundColor: getAvatarColor(startupNameDisp) }]}>
@@ -283,26 +283,26 @@ const StartupCard = React.memo(({
         {/* HIGHLIGHT LIST */}
         <View style={{ gap: 6, marginBottom: 14 }}>
           {[
-            { 
-              label: 'Doanh thu', 
-              value: startup.revenue, 
+            {
+              label: 'Doanh thu',
+              value: startup.revenue,
               color: colors.accentCyan,
               formatter: (v) => v > 0 ? `${(v / 1000000).toLocaleString('vi-VN')}M` : '0 đ'
             },
-            { 
-              label: 'Thị trường', 
-              value: startup.marketSize, 
+            {
+              label: 'Thị trường',
+              value: startup.marketSize,
               color: colors.accentGreen,
               formatter: (v) => v > 0 ? `${(v / 1000000).toLocaleString('vi-VN')}VND` : '0 đ'
             },
-            { 
-              label: 'Đối thủ chính', 
-              value: startup.competitors, 
+            {
+              label: 'Đối thủ chính',
+              value: startup.competitors,
               color: colors.text,
               formatter: (v) => v || '—'
             }
           ].map((item, idx) => (
-            <View key={idx} style={{ 
+            <View key={idx} style={{
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
               backgroundColor: colors.card, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
               borderWidth: 1, borderColor: colors.border
@@ -386,8 +386,8 @@ const StartupCard = React.memo(({
 export default StartupCard;
 
 const styles = StyleSheet.create({
-  card: { 
-    borderRadius: 16, 
+  card: {
+    borderRadius: 16,
     overflow: 'hidden',
     ...Platform.select({
       ios: {

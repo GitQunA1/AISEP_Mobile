@@ -7,11 +7,20 @@ export default function AdvisorCard({ advisor, onViewProfile, onConnect, booking
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   
-  const expertises = Array.isArray(advisor.expertise)
-    ? advisor.expertise
-    : (typeof advisor.expertise === 'string' 
-        ? advisor.expertise.split(',').map(s => s.trim()).filter(Boolean) 
+  const industries = Array.isArray(advisor.industries)
+    ? advisor.industries
+    : (typeof advisor.industries === 'string' 
+        ? advisor.industries.split(',').map(s => s.trim()).filter(Boolean) 
         : []);
+  
+  const skills = Array.isArray(advisor.skills)
+    ? advisor.skills
+    : (typeof advisor.skills === 'string' 
+        ? advisor.skills.split(',').map(s => s.trim()).filter(Boolean) 
+        : []);
+
+  const displayTags = [...industries, ...skills].slice(0, 3);
+  const remainingCount = [...industries, ...skills].length - displayTags.length;
   
   const initial = (advisor.userName || 'A').charAt(0).toUpperCase();
 
@@ -95,16 +104,16 @@ export default function AdvisorCard({ advisor, onViewProfile, onConnect, booking
         </View>
       </View>
 
-      {/* TOP TAGS SECTION - Unified style */}
+      {/* TOP TAGS SECTION - Using Industries and Skills */}
       <View style={styles.tagsWrapper}>
-        {expertises.slice(0, 2).map((exp, idx) => (
+        {displayTags.map((tag, idx) => (
           <View key={idx} style={[styles.chip, { backgroundColor: colors.mutedBackground }]}>
-            <Text style={[styles.chipText, { color: colors.text }]}>{exp}</Text>
+            <Text style={[styles.chipText, { color: colors.text }]}>{tag}</Text>
           </View>
         ))}
-        {expertises.length > 2 && (
+        {remainingCount > 0 && (
           <View style={[styles.chip, { backgroundColor: colors.mutedBackground }]}>
-            <Text style={[styles.chipText, { color: colors.secondaryText }]}>+{expertises.length - 2}</Text>
+            <Text style={[styles.chipText, { color: colors.secondaryText }]}>+{remainingCount}</Text>
           </View>
         )}
       </View>
@@ -246,8 +255,9 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   statItem: {
     flexDirection: 'row',
@@ -255,7 +265,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statText: {
-    fontSize: 13,
+    fontSize: 12,
+    flexShrink: 1,
   },
   actions: {
     flexDirection: 'row',

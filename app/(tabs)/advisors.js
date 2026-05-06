@@ -96,10 +96,19 @@ export default function AdvisorsScreen() {
     setMyBookings(prev => [...prev, { advisorId, status: 0 }]);
   };
 
-  const filteredAdvisors = advisors.filter(advisor =>
-    (advisor.userName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (advisor.expertise?.toLowerCase() || '').includes(searchQuery.toLowerCase())
-  );
+  const filteredAdvisors = advisors.filter(advisor => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesName = (advisor.userName?.toLowerCase() || '').includes(searchLower);
+    const matchesExpertise = (advisor.expertise?.toLowerCase() || '').includes(searchLower);
+    
+    const industriesStr = Array.isArray(advisor.industries) ? advisor.industries.join(' ') : (advisor.industries || '');
+    const matchesIndustries = industriesStr.toLowerCase().includes(searchLower);
+    
+    const skillsStr = Array.isArray(advisor.skills) ? advisor.skills.join(' ') : (advisor.skills || '');
+    const matchesSkills = skillsStr.toLowerCase().includes(searchLower);
+    
+    return matchesName || matchesExpertise || matchesIndustries || matchesSkills;
+  });
 
   const getBookingStatus = (advisorId) => {
     const booking = myBookings.find(b => b.advisorId === advisorId);

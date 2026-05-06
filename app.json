@@ -22,6 +22,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.fantacola0x0.AISEP_Mobile"
     },
     "web": {

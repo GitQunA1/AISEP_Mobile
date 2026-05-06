@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ExpoLinking from 'expo-linking';
-import { Lock, Zap, Brain, Sparkles, Crown } from 'lucide-react-native';
+import { Lock, Zap, Brain, Sparkles, Crown, FileText } from 'lucide-react-native';
 
 import projectSubmissionService from '../../src/services/projectSubmissionService';
 import startupProfileService from '../../src/services/startupProfileService';
@@ -15,6 +15,23 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import QuotaGuardModal from '../../src/components/common/QuotaGuardModal';
 import AIEvaluationModal from '../../src/components/common/AIEvaluationModal';
+import { 
+  SCORECARD_SECTIONS, 
+  scorecardFromApiToFormState, 
+  getScorecardOptionLabel,
+  getScorecardQuickStats,
+  TARGET_MARKET_SIZE,
+  MARKET_GROWTH,
+  PRODUCT_READINESS,
+  IP_PROTECTION,
+  BARRIER_TO_ENTRY,
+  CURRENT_TRACTION,
+  RUNWAY_MONTHS,
+  TEAM_SIZE,
+  TEAM_EXPERIENCE,
+  SCORECARD_BOOLEAN_FIELD
+} from '../../src/constants/projectScorecard';
+import DueDiligenceModal from '../../src/components/startup/DueDiligenceModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,12 +52,27 @@ export default function StartupDetailScreen() {
   const isEligible = isInvestor || isStartupUser;
 
   const [project, setProject] = useState(null);
+  const [assignedAdvisors, setAssignedAdvisors] = useState([]);
   const [isManualUnlocked, setIsManualUnlocked] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [aiHistory, setAiHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+
+  const industryTags = (() => {
+    if (!project) return '—';
+    const rawInds = project.industries || project.Industries;
+    if (Array.isArray(rawInds) && rawInds.length > 0) return rawInds.join(', ');
+    
+    const singleInd = project.industry || project.Industry || project.industryName || project.projectIndustry || project.category || project.field;
+    if (Array.isArray(singleInd)) return singleInd.join(', ');
+    if (singleInd) return String(singleInd);
+    
+    if (project.tags && project.tags.length > 0) return project.tags.join(', ');
+    return '—';
+  })();
 
   // Quota Guard Modal state
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -49,6 +81,13 @@ export default function StartupDetailScreen() {
   const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [showAIResultModal, setShowAIResultModal] = useState(false);
+  const [showDueDiligenceModal, setShowDueDiligenceModal] = useState(false);
+
+  const mappedScorecard = project?.projectScorecard 
+    ? scorecardFromApiToFormState(project.projectScorecard) 
+    : (project?.ProjectScorecard ? scorecardFromApiToFormState(project.ProjectScorecard) : null);
+
+  const scQuick = project ? getScorecardQuickStats(project) : null;
 
   // Hide tab bar and default header
   useEffect(() => {
@@ -81,10 +120,11 @@ export default function StartupDetailScreen() {
 
 
       // Always start with non-premium endpoint, then check if we should fetch full
-      const [pRes, dRes, aRes] = await Promise.all([
+      const [pRes, dRes, aRes, advRes] = await Promise.all([
         projectSubmissionService.getProjectNonPremiumById(id),
         projectSubmissionService.getDocuments(id).catch(() => null),
-        AIEvaluationService.getProjectAnalysisHistory(id).catch(() => null)
+        AIEvaluationService.getProjectAnalysisHistory(id).catch(() => null),
+        projectSubmissionService.getAssignedAdvisors(id).catch(() => [])
       ]);
 
       if (pRes?.success && pRes?.data) {
@@ -97,13 +137,22 @@ export default function StartupDetailScreen() {
           setIsOwner(true);
         }
 
-        // Fetch full data if owned, already unlocked, or user is a bypass role (Staff/Admin/Advisor)
-        // Note: For regular Investors/Startups, they must unlock first unless they already did.
-        const shouldFetchFull = ownerConfirmed || projectData.isUnlockedByCurrentUser || isManualUnlocked || bypassRole;
+        // 3. Check for "already unlocked" or "authorized to see full"
+        // We check camelCase, PascalCase, and bypass roles.
+        const unlockedFromApi = projectData.isUnlockedByCurrentUser === true || 
+                                projectData.IsUnlockedByCurrentUser === true;
+
+        const shouldFetchFull = ownerConfirmed || unlockedFromApi || isManualUnlocked || bypassRole;
 
         if (shouldFetchFull) {
           const fullRes = await projectSubmissionService.getProjectById(id);
-          if (fullRes?.success && fullRes.data) projectData = fullRes.data;
+          if (fullRes?.success && fullRes.data) {
+            // MERGE: Keep the unlock status from non-premium if full response doesn't have it
+            projectData = {
+              ...fullRes.data,
+              isUnlockedByCurrentUser: unlockedFromApi || fullRes.data.isUnlockedByCurrentUser || fullRes.data.IsUnlockedByCurrentUser
+            };
+          }
         }
 
         setProject({
@@ -124,6 +173,11 @@ export default function StartupDetailScreen() {
 
       if (aRes?.data) {
         setAiHistory(Array.isArray(aRes.data) ? aRes.data : [aRes.data]);
+      }
+
+      if (advRes) {
+        const advList = advRes.data || advRes;
+        if (Array.isArray(advList)) setAssignedAdvisors(advList);
       }
     } catch (err) {
       console.error('ProjectDetail fetch error:', err);
@@ -199,7 +253,7 @@ export default function StartupDetailScreen() {
   };
 
   // Determine if current user is Startup role (for unlock/AI logic)
-  const isAlreadyUnlocked = project?.isUnlockedByCurrentUser || isOwner || isManualUnlocked || bypassRole;
+  const isAlreadyUnlocked = project?.isUnlockedByCurrentUser || project?.IsUnlockedByCurrentUser || isOwner || isManualUnlocked || bypassRole;
   // isPremiumUnlockable: user has a paid subscription AND has remaining views
   const canUnlock = isEligible && isPremium && quota.remainingProjectViews > 0 && !isAlreadyUnlocked;
   const canAIAnalyze = isEligible && isPremium && quota.remainingAiRequests > 0;
@@ -428,7 +482,7 @@ export default function StartupDetailScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
         {/* HERO SECTION */}
@@ -478,57 +532,62 @@ export default function StartupDetailScreen() {
         <View style={{ gap: 12, marginHorizontal: 16, marginBottom: 28 }}>
           {[
             {
-              icon: <Ionicons name="logo-usd" size={18} color={colors.primary} />,
-              label: 'DOANH THU',
+              icon: <Ionicons name="trending-up-outline" size={18} color="#2D7EFF" />,
+              label: 'TÌNH HÌNH KD (TRACTION)',
               isPremium: true,
-              value: formatCurrency(project.revenue),
-              color: colors.primary
+              value: scQuick ? scQuick.traction : '—',
+              color: '#2D7EFF'
             },
             {
               icon: <Ionicons name="bar-chart-outline" size={18} color="#27AE60" />,
-              label: 'THỊ TRƯỜNG',
+              label: 'QUY MÔ TT (SCORECARD)',
               isPremium: true,
-              value: formatCurrency(project.marketSize),
+              value: scQuick ? scQuick.market : '—',
               color: '#27AE60'
             },
             {
               icon: <Ionicons name="flash" size={18} color="#F5A623" />,
-              label: 'ĐIỂM AI',
+              label: 'ĐIỂM AI POTENTIAL',
               isPremium: false,
               value: project.startupPotentialScore || project.aiScore || '—',
               color: '#F5A623'
             },
           ].map((stat, index) => (
             <View key={index} style={{
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              flexDirection: 'row', alignItems: 'center',
               backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
-              paddingHorizontal: 16, paddingVertical: 16, borderRadius: 20,
+              paddingHorizontal: 16, paddingVertical: 14, borderRadius: 20,
               borderWidth: 1, borderColor: colors.border + '40',
               ...Platform.select({
                 ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
                 android: { elevation: 2 }
               })
             }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
-                <View style={{ 
-                  width: 38, height: 38, borderRadius: 12, 
-                  backgroundColor: stat.color + '15', 
-                  justifyContent: 'center', alignItems: 'center' 
-                }}>
-                  {stat.icon}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.secondaryText, letterSpacing: 1, marginBottom: 4 }}>
-                    {stat.label}
-                  </Text>
+              <View style={{ 
+                width: 38, height: 38, borderRadius: 12, 
+                backgroundColor: stat.color + '15', 
+                justifyContent: 'center', alignItems: 'center',
+                marginRight: 14
+              }}>
+                {stat.icon}
+              </View>
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <Text 
+                  style={{ fontSize: 10, fontWeight: '800', color: colors.secondaryText, letterSpacing: 1, marginBottom: 2 }}
+                  numberOfLines={2}
+                >
+                  {stat.label}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {isOwner || isAlreadyUnlocked || !stat.isPremium ? (
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: stat.color }} numberOfLines={1}>
+                    <Text 
+                      style={{ fontSize: 15, fontWeight: '900', color: stat.color, flexShrink: 1 }} 
+                      numberOfLines={1}
+                    >
                       {stat.value}
                     </Text>
                   ) : (
-                    <View style={{ width: 100 }}>
-                      <PremiumBadge onPress={() => setShowUnlockModal(true)} />
-                    </View>
+                    <PremiumBadge onPress={() => setShowUnlockModal(true)} />
                   )}
                 </View>
               </View>
@@ -542,12 +601,13 @@ export default function StartupDetailScreen() {
           title="THÔNG TIN CƠ BẢN"
           accentColor={colors.primary}
         >
-          <FieldLabel>MÔ TẢ NGẮN</FieldLabel>
-          <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 20, marginBottom: 14 }}>{project.shortDescription || project.description}</Text>
-
+          <DetailRow label="MÔ TẢ NGẮN" value={project.shortDescription || project.description} />
+          
           <FieldLabel>GIAI ĐOẠN PHÁT TRIỂN</FieldLabel>
           <StageBadge stage={project.stage} />
+          <View style={{ marginBottom: 16 }} />
 
+          <DetailRow label="LĨNH VỰC" value={industryTags} />
           <DetailRow label="VẤN ĐỀ CẦN GIẢI QUYẾT" value={project.problemStatement} />
           <DetailRow label="GIẢI PHÁP ĐỀ XUẤT" value={project.solutionDescription || project.proposedSolution} />
         </SectionCard>
@@ -580,53 +640,7 @@ export default function StartupDetailScreen() {
           )}
         </SectionCard>
 
-        {/* ĐỘI NGŨ */}
-        <SectionCard
-          icon={<Ionicons name="people-outline" size={16} color="#A78BFA" />}
-          title="ĐỘI NGŨ"
-          accentColor="#A78BFA"
-        >
-          <DetailRow label="THÀNH VIÊN" value={project.teamMembers} isPremium />
-          <DetailRow label="KỸ NĂNG CỐT LÕI" value={project.keySkills} />
-        </SectionCard>
 
-        {/* ACTION BUTTONS: Unlock (for Investor/Startup users) */}
-        {isEligible && !isOwner && !isAlreadyUnlocked && (
-          <View style={{ paddingHorizontal: 16, marginBottom: 16, gap: 10 }}>
-            {/* Unlock Button */}
-            {!isAlreadyUnlocked && (
-              <TouchableOpacity
-                onPress={() => {
-                  if (!isPremium) {
-                    Alert.alert(
-                      'Tính năng Premium',
-                      'Bạn cần nâng cấp gói dịch vụ để mở khóa thông tin chi tiết của dự án.',
-                      [
-                        { text: 'Hủy', style: 'cancel' },
-                        { text: 'Nâng cấp ngay', onPress: () => router.push('/subscription/management') }
-                      ]
-                    );
-                    return;
-                  }
-                  setShowUnlockModal(true);
-                }}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  backgroundColor: isPremium ? colors.primary : '#f59e0b',
-                  paddingVertical: 13, borderRadius: 14,
-                }}
-              >
-                <Lock size={16} color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                  {isPremium
-                    ? `Mở khóa chi tiết (còn ${quota.remainingProjectViews} lượt)`
-                    : 'Nâng cấp để mở khóa'}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-          </View>
-        )}
 
         {/* LỊCH SỬ ĐÁNH GIÁ AI */}
         <View style={{
@@ -672,47 +686,54 @@ export default function StartupDetailScreen() {
           icon={<Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />}
           title="CỐ VẤN CHÍNH THỨC"
           accentColor={colors.primary}
-          hasBorderAccent={!!(project.assignedAdvisorName || project.advisors?.length > 0)}
+          hasBorderAccent={assignedAdvisors.length > 0}
         >
-          {project.assignedAdvisorName ? (
-            <TouchableOpacity
-              onPress={() => router.push(`/advisor/${project.assignedAdvisorId}`)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-                paddingVertical: 8,
-              }}
-            >
-              <View style={{
-                width: 44, height: 44, borderRadius: 10,
-                backgroundColor: getAvatarColor(project.assignedAdvisorName),
-                justifyContent: 'center', alignItems: 'center',
-              }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>
-                  {project.assignedAdvisorName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
-                  {project.assignedAdvisorName}
-                </Text>
-                <Text style={{ fontSize: 12, color: colors.secondaryText }}>
-                  Cố vấn chính thức · {formatCurrency(project.assignedAdvisorHourlyRate)} VND/h
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
-                  {(project.assignedAdvisorIndustries || []).map((ind) => (
-                    <View key={ind} style={{
-                      backgroundColor: colors.primary + '15',
-                      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
-                    }}>
-                      <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>{ind}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.border} />
-            </TouchableOpacity>
+          {assignedAdvisors.length > 0 ? (
+            <View style={{ gap: 16 }}>
+              {assignedAdvisors.map((adv, idx) => (
+                <TouchableOpacity
+                  key={adv.advisorId || idx}
+                  onPress={() => router.push(`/advisor/${adv.advisorId}`)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <View style={{
+                    width: 44, height: 44, borderRadius: 10,
+                    backgroundColor: getAvatarColor(adv.advisorName || adv.userName),
+                    justifyContent: 'center', alignItems: 'center',
+                  }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#fff' }}>
+                      {(adv.advisorName || adv.userName || 'A').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                      {adv.advisorName || adv.userName}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.secondaryText }}>
+                      Cố vấn chính thức {adv.hourlyRate ? `· ${formatCurrency(adv.hourlyRate)} VND/h` : ''}
+                    </Text>
+                    {adv.expertise && (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+                        {adv.expertise.split(',').map((ind) => (
+                          <View key={ind} style={{
+                            backgroundColor: colors.primary + '15',
+                            paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
+                          }}>
+                            <Text style={{ fontSize: 10, color: colors.primary, fontWeight: '700' }}>{ind.trim()}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.border} />
+                </TouchableOpacity>
+              ))}
+            </View>
           ) : (
             <Text style={{ color: colors.secondaryText, fontSize: 13 }}>Chưa có cố vấn được chỉ định</Text>
           )}
@@ -724,12 +745,38 @@ export default function StartupDetailScreen() {
           title="THỊ TRƯỜNG & MÔ HÌNH"
           accentColor="#27AE60"
         >
+          <DetailRow label="KHÁCH HÀNG MỤC TIÊU" value={project.targetCustomers} isPremium />
+          <DetailRow label="UVP" value={project.uniqueValueProposition || project.uvp} isPremium />
+          <DetailRow label="MÔ HÌNH KINH DOANH" value={project.businessModel} isPremium />
+          
+          {mappedScorecard && (
+            <>
+              <DetailRow label="QUY MÔ THỊ TRƯỜNG" value={getScorecardOptionLabel(TARGET_MARKET_SIZE, mappedScorecard.targetMarketSize)} isPremium />
+              <DetailRow label="TỐC ĐỘ TĂNG TRƯỞNG THỊ TRƯỜNG" value={getScorecardOptionLabel(MARKET_GROWTH, mappedScorecard.marketGrowth)} isPremium />
+              <DetailRow label="ĐỘ SẴN SÀNG CỦA SẢN PHẨM" value={getScorecardOptionLabel(PRODUCT_READINESS, mappedScorecard.productReadiness)} isPremium />
+              <DetailRow label="BẢO VỆ SỞ HỮU TRÍ TUỆ" value={getScorecardOptionLabel(IP_PROTECTION, mappedScorecard.ipProtection)} isPremium />
+              <DetailRow label="RÀO CẢN GIA NHẬP NGÀNH" value={getScorecardOptionLabel(BARRIER_TO_ENTRY, mappedScorecard.barrierToEntry)} isPremium />
+              <DetailRow label="TÌNH TRẠNG KINH DOANH HIỆN TẠI" value={getScorecardOptionLabel(CURRENT_TRACTION, mappedScorecard.currentTraction)} isPremium />
+              <DetailRow label="THỜI GIAN DUY TRÌ HOẠT ĐỘNG" value={getScorecardOptionLabel(RUNWAY_MONTHS, mappedScorecard.runwayMonths)} isPremium />
+            </>
+          )}
+        </SectionCard>
 
-          <DetailRow 
-            label="MÔ HÌNH KINH DOANH" 
-            value={project.businessModel} 
-            isPremium 
-          />
+        {/* ĐỘI NGŨ SÁNG LẬP */}
+        <SectionCard
+          icon={<Ionicons name="people-outline" size={16} color="#E07D52" />}
+          title="ĐỘI NGŨ SÁNG LẬP"
+          accentColor="#E07D52"
+        >
+          {mappedScorecard ? (
+            <>
+              <DetailRow label="KÍCH THƯỚC ĐỘI NGŨ" value={getScorecardOptionLabel(TEAM_SIZE, mappedScorecard.teamSize)} />
+              <DetailRow label="KINH NGHIỆM ĐỘI NGŨ" value={getScorecardOptionLabel(TEAM_EXPERIENCE, mappedScorecard.teamExperience)} />
+              <DetailRow label="CO-FOUNDER KỸ THUẬT" value={mappedScorecard.hasTechnicalCofounder ? 'Có' : 'Không'} />
+            </>
+          ) : (
+            <Text style={{ color: colors.secondaryText, fontSize: 13 }}>Đang cập nhật thông tin đội ngũ</Text>
+          )}
         </SectionCard>
 
         {/* CẠNH TRANH */}
@@ -738,9 +785,57 @@ export default function StartupDetailScreen() {
           title="CẠNH TRANH"
           accentColor="#E05252"
         >
-          <DetailRow label="KINH NGHIỆM ĐỘI NGŨ" value={project.teamExperience} isPremium />
           <DetailRow label="ĐỐI THỦ CẠNH TRANH" value={project.competitors} isPremium />
         </SectionCard>
+
+        {/* PROJECT SCORECARD (NEW) */}
+        {project.projectScorecard && (
+          <SectionCard
+            icon={<Ionicons name="list-outline" size={16} color={colors.primary} />}
+            title="BẢNG ĐÁNH GIÁ DỰ ÁN"
+            accentColor={colors.primary}
+          >
+            {(() => {
+              const scorecard = scorecardFromApiToFormState(project.projectScorecard);
+              return SCORECARD_SECTIONS.map((section, sIdx) => (
+                <View key={sIdx} style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 8 }}>{section.title}</Text>
+                  {section.fields.map((field) => {
+                    const value = scorecard[field.key];
+                    const option = field.options.find(o => o.value === value);
+                    return (
+                      <View key={field.key} style={{ marginBottom: 8, paddingLeft: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.secondaryText }}>{field.label}</Text>
+                        <Text style={{ fontSize: 14, color: colors.text, marginTop: 2 }}>
+                          {option ? option.label : '—'}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+          </SectionCard>
+        )}
+
+        {/* DUE DILIGENCE GENERATION (NEW) */}
+        {(isOwner || isInvestor || bypassRole) && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+            <TouchableOpacity
+              onPress={() => setShowDueDiligenceModal(true)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                backgroundColor: '#1e293b',
+                paddingVertical: 13, borderRadius: 14,
+              }}
+            >
+              <FileText size={18} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+                Xuất Báo Cáo Due Diligence
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* TÀI LIỆU DỰ ÁN */}
         <SectionCard
@@ -814,6 +909,13 @@ export default function StartupDetailScreen() {
         onClose={() => setShowAIResultModal(false)}
         data={aiResult}
         projectName={project?.name}
+      />
+
+      <DueDiligenceModal
+        visible={showDueDiligenceModal}
+        onClose={() => setShowDueDiligenceModal(false)}
+        project={project}
+        user={user}
       />
     </View>
   );

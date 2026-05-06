@@ -57,20 +57,25 @@ export default function InvestorsScreen() {
 
   const fetchInvestors = async () => {
     try {
-      const response = await investorService.getAllInvestors();
+      // Use matching API for startups to show relevant investors, otherwise use general list
+      const isStartup = user?.role === 0 || user?.role === 'Startup';
+      const response = isStartup 
+        ? await investorService.getMatchingInvestors() 
+        : await investorService.getAllInvestors();
+
       if (response && response.items) {
         const formatted = response.items.map(inv => ({
           id: inv.investorId,
           name: inv.organizationName || inv.userName,
           userName: inv.userName,
           thesis: inv.investmentTaste || 'Chưa cập nhật khẩu vị đầu tư.',
-          type: 'Quỹ đầu tư', 
-          industries: inv.focusIndustry ? inv.focusIndustry.split(',').map(s => s.trim()) : [],
-          stages: inv.preferredStage ? [inv.preferredStage] : ['Giai đoạn sớm'],
+          type: 'Nhà đầu tư', 
+          industries: Array.isArray(inv.industries) ? inv.industries : (inv.industries ? inv.industries.split(',').map(s => s.trim()) : []),
+          stages: inv.preferredStage ? [inv.preferredStage] : (inv.preferredStageOptionId ? [`Giai đoạn ${inv.preferredStageOptionId}`] : ['Chưa xác định']),
           location: inv.investmentRegion || 'Chưa cập nhật',
           ticketSize: inv.investmentAmount ? `${inv.investmentAmount.toLocaleString()} VND` : 'N/A',
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(inv.organizationName || inv.userName)}&background=random`,
-          verified: true
+          avatar: inv.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(inv.organizationName || inv.userName)}&background=random`,
+          verified: inv.status === 'Approved'
         }));
         setInvestors(formatted);
       }

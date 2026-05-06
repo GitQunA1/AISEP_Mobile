@@ -36,9 +36,9 @@ const PAGE_SIZE = 10;
 const HEADER_HEIGHT = 110; // BASE HEIGHT without SafeArea inset
 
 const SORT_OPTIONS = [
-  { key: 'newest',      label: 'Mới nhất',      icon: Clock, sieve: '-CreatedAt' },
-  { key: 'oldest',      label: 'Cũ nhất',        icon: List,  sieve: 'CreatedAt' },
-  { key: 'recommended', label: 'Được đề xuất',   icon: Star,  sieve: '-ProjectId' },
+  { key: 'newest', label: 'Mới nhất', icon: Clock, sieve: '-CreatedAt' },
+  { key: 'oldest', label: 'Cũ nhất', icon: List, sieve: 'CreatedAt' },
+  { key: 'recommended', label: 'Được đề xuất', icon: Star, sieve: '-ProjectId' },
 ];
 
 // These will be fallback/initial values if dynamic fetch fails
@@ -67,7 +67,7 @@ export default function DiscoveryScreen() {
     outputRange: [0, 1],
     extrapolateLeft: 'clamp',
   });
-  
+
   // Tie diffClamp to the clamped scroll value
   const clampedScroll = Animated.diffClamp(scrollYClamped, 0, ACTUAL_HEADER_HEIGHT);
 
@@ -75,20 +75,20 @@ export default function DiscoveryScreen() {
   const headerTranslateY = 0; // KEEP FIXED AS REQUESTED
 
   // State
-  const [projects, setProjects]           = useState([]);
-  const [page, setPage]                   = useState(1);
-  const [totalCount, setTotalCount]       = useState(0);
-  const [isLoading, setIsLoading]         = useState(true);
+  const [projects, setProjects] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isRefreshing, setIsRefreshing]   = useState(false);
-  const [hasMore, setHasMore]             = useState(true);
-  const [activeSort, setActiveSort]       = useState('newest');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [activeSort, setActiveSort] = useState('newest');
   const [activeFilters, setActiveFilters] = useState({ stage: [], industry: [] });
   const { isPremium: hasSub, startupProfile } = useSubscription();
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollTopAnim = useRef(new Animated.Value(0)).current;
-  
+
   const [dynamicStages, setDynamicStages] = useState([]);
   const [dynamicIndustries, setDynamicIndustries] = useState([]);
 
@@ -134,7 +134,7 @@ export default function DiscoveryScreen() {
 
       const data = projectsRes.data || projectsRes;
       const items = data.items || [];
-      
+
       const mappedItems = items.map(p => {
         const sid = p.startupId || p.userId;
         const info = startupMap[sid];
@@ -190,7 +190,7 @@ export default function DiscoveryScreen() {
       } else {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
       }
-      
+
       setProjects(result.data);
       setTotalCount(result.total);
       setHasMore(result.hasMore);
@@ -204,7 +204,7 @@ export default function DiscoveryScreen() {
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore || isLoading || isRefreshing) return;
-    
+
     setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
@@ -260,8 +260,8 @@ export default function DiscoveryScreen() {
     fetchInitial(key);
   };
 
-  const followedProjectIdsSet = React.useMemo(() => 
-    new Set(user?.followedProjectIds || []), 
+  const followedProjectIdsSet = React.useMemo(() =>
+    new Set(user?.followedProjectIds || []),
     [user?.followedProjectIds]
   );
 
@@ -309,16 +309,16 @@ export default function DiscoveryScreen() {
   return (
     <TabScreenWrapper>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        
+
         {/* ANIMATED HEADER */}
         {/* Top Plate: Covers the status bar area to prevent content from bleeding through when header is hidden */}
 
         <Animated.View style={[
-          styles.animatedHeader, 
-          { 
-            backgroundColor: colors.background, 
+          styles.animatedHeader,
+          {
+            backgroundColor: colors.background,
             transform: [{ translateY: headerTranslateY }],
-            zIndex: 1000, 
+            zIndex: 1000,
             paddingTop: 10,
             // Header effect condition
             elevation: isDark ? 4 : 0,
@@ -378,13 +378,13 @@ export default function DiscoveryScreen() {
                 );
               })}
             </ScrollView>
-            
+
             <TouchableOpacity
               onPress={() => setFilterModalVisible(true)}
-              style={{ 
+              style={{
                 paddingHorizontal: 16,
                 height: 48,
-                justifyContent: 'center', 
+                justifyContent: 'center',
                 alignItems: 'center',
                 backgroundColor: activeFilterCount > 0 ? colors.primary + '15' : colors.background,
                 borderLeftWidth: 1,
@@ -414,7 +414,7 @@ export default function DiscoveryScreen() {
           keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { 
+            {
               useNativeDriver: true,
               listener: (event) => {
                 const y = event.nativeEvent.contentOffset.y;
@@ -658,27 +658,27 @@ const styles = {
     backgroundColor: colors.primary,
     alignItems: 'center',
   }),
-  filterGroupLabel: (colors) => ({ 
-    color: colors.secondaryText, 
-    fontSize: 10, 
-    marginBottom: 12, 
-    fontWeight: '900', 
-    textTransform: 'uppercase', 
+  filterGroupLabel: (colors) => ({
+    color: colors.secondaryText,
+    fontSize: 10,
+    marginBottom: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
     letterSpacing: 1.5
   }),
   chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 },
-  chip: (colors) => ({ 
+  chip: (colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 14, 
-    borderWidth: 1, 
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.hover || 'rgba(255,255,255,0.05)'
   }),
-  chipActive: (colors) => ({ 
-    borderColor: colors.primary, 
+  chipActive: (colors) => ({
+    borderColor: colors.primary,
     backgroundColor: colors.primary
   }),
   chipText: (colors) => ({ color: colors.secondaryText, fontSize: 13, fontWeight: '600' }),

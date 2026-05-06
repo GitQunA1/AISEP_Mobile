@@ -112,11 +112,6 @@ export default function AdvisorDetailScreen() {
               <Text style={[styles.statValue, { color: colors.text }]}>{advisor.hourlyRate?.toLocaleString()}đ</Text>
               <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Theo giờ</Text>
             </View>
-            <View style={styles.divider} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.text }]}>{advisor.bookingCount || 0}</Text>
-              <Text style={[styles.statLabel, { color: colors.secondaryText }]}>Lượt tư vấn</Text>
-            </View>
           </View>
         </LinearGradient>
 
@@ -239,6 +234,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 24,
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',

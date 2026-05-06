@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, Modal, ScrollView, 
-  TouchableOpacity, Dimensions, ActivityIndicator 
+  TouchableOpacity, Dimensions, ActivityIndicator, Platform 
 } from 'react-native';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { 
   TrendingUp, Sparkles, X, Brain, CheckCircle, 
   AlertCircle, AlertTriangle, BarChart3, ChevronDown, 
@@ -11,6 +12,7 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../Card';
 import FadeInView from '../FadeInView';
+import AIAnalysisRadarChart from './AIAnalysisRadarChart';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -24,19 +26,22 @@ export default function AIEvaluationModal({
 }) {
   const { activeTheme, isDark } = useTheme();
   const colors = activeTheme.colors;
+  const insets = useSafeAreaInsets();
   const [expandedSections, setExpandedSections] = useState({});
 
   if (!visible) return null;
 
-  // Extract analysis data
+  // Extract analysis data (Normalized format)
   const analysis = data?.analysis || {};
   const scoreBreakdown = data?.scoreBreakdown || [];
   const potentialScore = data?.potentialScore || data?.startupPotentialScore || 0;
-  const chaosScore = data?.chaosScore || 0;
-  const strengths = data?.strengths || [];
-  const weaknesses = data?.weaknesses || [];
-  const summary = data?.summary || '';
-  const recommendations = data?.recommendations || [];
+  
+  // Extract key points from nested analysis if available
+  const strengths = analysis.strengths || data?.strengths || [];
+  const weaknesses = analysis.weaknesses || data?.weaknesses || [];
+  const summary = analysis.summary || data?.summary || '';
+  const recommendations = analysis.recommendations || data?.recommendations || [];
+  const auditedItems = analysis.auditedItems || [];
 
   const toggleSection = (key) => {
     setExpandedSections(prev => ({
@@ -47,19 +52,26 @@ export default function AIEvaluationModal({
 
   const translateKey = (k) => {
     const map = {
-      'team': 'Đội ngũ',
-      'opportunity': 'Thị trường',
-      'product': 'Sản phẩm',
-      'market': 'Thị trường',
-      'competition': 'Cạnh tranh',
-      'financials': 'Tài chính',
-      'strategy': 'Chiến lược',
-      'execution': 'Thực thi',
-      'growth': 'Tăng trưởng',
-      'risk': 'Rủi ro',
-      'investment': 'Huy động vốn'
+      team: 'Đội ngũ',
+      market: 'Thị trường',
+      product: 'Sản phẩm',
+      competition: 'Cạnh tranh',
+      traction: 'Tiến triển',
+      investmentneed: 'Nhu cầu đầu tư',
+      opportunity: 'Cơ hội thị trường',
+      financials: 'Tài chính',
+      strategy: 'Chiến lược',
+      execution: 'Thực thi',
+      marketing: 'Tiếp thị',
+      growth: 'Tăng trưởng',
+      risk: 'Rủi ro',
+      investment: 'Huy động vốn',
+      marketsize: 'Quy mô thị trường',
+      revenue: 'Doanh thu',
+      businessmodel: 'Mô hình kinh doanh',
     };
-    return map[k.toLowerCase()] || k.charAt(0).toUpperCase() + k.slice(1);
+    const lower = String(k || '').toLowerCase().replace(/\s+/g, '');
+    return map[lower] || k;
   };
 
   const renderContent = () => {
@@ -89,7 +101,13 @@ export default function AIEvaluationModal({
         {/* Overall Score */}
         <View style={styles.scoreContainer}>
           <View style={[styles.scoreCircle, { borderColor: colors.primary }]}>
-            <Text style={[styles.scoreValue, { color: colors.text }]}>{potentialScore}</Text>
+            <Text 
+              style={[styles.scoreValue, { color: colors.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {potentialScore}
+            </Text>
             <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
           </View>
           <View style={styles.scoreMeta}>
@@ -129,75 +147,137 @@ export default function AIEvaluationModal({
           </View>
         )}
 
-        {/* Summary Box */}
+        {/* Radar Chart (Matrix Graph) */}
+        {auditedItems.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <TrendingUp size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Ma trận đánh giá (Khai báo vs AI)</Text>
+            </View>
+            <AIAnalysisRadarChart auditedItems={auditedItems} labelMapper={translateKey} />
+          </View>
+        )}
+
+        {/* Expandable Details */}
+        {(auditedItems.length > 0 || Object.keys(analysis).length > 0) && (
+          <View style={styles.section}>
+             <View style={styles.sectionHeader}>
+              <Info size={18} color={colors.accentCyan} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Chi tiết các hạng mục</Text>
+            </View>
+            {/* New Array Structure */}
+            {auditedItems.length > 0 ? (
+              auditedItems.map((item, idx) => {
+                const isExpanded = expandedSections[`item-${idx}`];
+                return (
+                  <TouchableOpacity 
+                    key={idx} 
+                    activeOpacity={0.7}
+                    onPress={() => toggleSection(`item-${idx}`)}
+                    style={[styles.analysisItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  >
+                    <View style={styles.analysisHeader}>
+                      <View style={styles.analysisTitleRow}>
+                        {isExpanded ? <ChevronDown size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.secondaryText} />}
+                        <Text style={[styles.analysisTitle, { color: colors.text }]}>{translateKey(item.criteria || item.title || 'Hạng mục')}</Text>
+                      </View>
+                      <Text style={[styles.analysisScore, { color: colors.primary }]}>{item.score?.toFixed(1) || '—'}</Text>
+                    </View>
+                    
+                    {isExpanded && (
+                      <View style={styles.analysisDetails}>
+                        {item.reason && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Lý do:</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>{item.reason}</Text>
+                          </View>
+                        )}
+                        {Array.isArray(item.evidence) && item.evidence.length > 0 && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Bằng chứng:</Text>
+                            {item.evidence.map((e, i) => (
+                              <Text key={i} style={[styles.detailValue, { color: colors.text }]}>• {e}</Text>
+                            ))}
+                          </View>
+                        )}
+                        {Array.isArray(item.missingData) && item.missingData.length > 0 && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: '#ef4444' }]}>Dữ liệu thiếu:</Text>
+                            {item.missingData.map((m, i) => (
+                              <Text key={i} style={[styles.detailValue, { color: colors.secondaryText }]}>⚠ {m}</Text>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              /* Fallback for Legacy Object Structure */
+              Object.entries(analysis).map(([key, section]) => {
+                if (!section || typeof section !== 'object' || section.score === undefined) return null;
+                const isExpanded = expandedSections[key];
+                return (
+                  <TouchableOpacity 
+                    key={key} 
+                    activeOpacity={0.7}
+                    onPress={() => toggleSection(key)}
+                    style={[styles.analysisItem, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  >
+                    <View style={styles.analysisHeader}>
+                      <View style={styles.analysisTitleRow}>
+                        {isExpanded ? <ChevronDown size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.secondaryText} />}
+                        <Text style={[styles.analysisTitle, { color: colors.text }]}>{translateKey(key)}</Text>
+                      </View>
+                      <Text style={[styles.analysisScore, { color: colors.primary }]}>{section.score?.toFixed(1)}</Text>
+                    </View>
+                    
+                    {isExpanded && (
+                      <View style={styles.analysisDetails}>
+                        {section.reason && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Lý do:</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>{section.reason}</Text>
+                          </View>
+                        )}
+                        {section.evidence?.length > 0 && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Bằng chứng:</Text>
+                            {section.evidence.map((e, i) => (
+                              <Text key={i} style={[styles.detailValue, { color: colors.text }]}>• {e}</Text>
+                            ))}
+                          </View>
+                        )}
+                        {section.missingData?.length > 0 && (
+                          <View style={styles.detailBlock}>
+                            <Text style={[styles.detailLabel, { color: '#ef4444' }]}>Dữ liệu thiếu:</Text>
+                            {section.missingData.map((m, i) => (
+                              <Text key={i} style={[styles.detailValue, { color: colors.secondaryText }]}>⚠ {m}</Text>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {/* Summary Box (Moved below details like Web) */}
         {summary ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Brain size={18} color="#8b5cf6" />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Phân tích tổng quan</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Kết luận & Tóm tắt</Text>
             </View>
             <View style={[styles.summaryBox, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderLeftColor: '#8b5cf6' }]}>
               <Text style={[styles.summaryText, { color: colors.text }]}>{summary}</Text>
             </View>
           </View>
         ) : null}
-
-        {/* Expandable Details */}
-        {Object.keys(analysis).length > 0 && (
-          <View style={styles.section}>
-             <View style={styles.sectionHeader}>
-              <Info size={18} color={colors.accentCyan} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Chi tiết các hạng mục</Text>
-            </View>
-            {Object.entries(analysis).map(([key, section]) => {
-              if (!section || typeof section !== 'object' || section.score === undefined) return null;
-              const isExpanded = expandedSections[key];
-              return (
-                <TouchableOpacity 
-                  key={key} 
-                  activeOpacity={0.7}
-                  onPress={() => toggleSection(key)}
-                  style={[styles.analysisItem, { borderColor: colors.border, backgroundColor: colors.card }]}
-                >
-                  <View style={styles.analysisHeader}>
-                    <View style={styles.analysisTitleRow}>
-                      {isExpanded ? <ChevronDown size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.secondaryText} />}
-                      <Text style={[styles.analysisTitle, { color: colors.text }]}>{translateKey(key)}</Text>
-                    </View>
-                    <Text style={[styles.analysisScore, { color: colors.primary }]}>{section.score?.toFixed(1)}</Text>
-                  </View>
-                  
-                  {isExpanded && (
-                    <View style={styles.analysisDetails}>
-                      {section.reason && (
-                        <View style={styles.detailBlock}>
-                          <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Lý do:</Text>
-                          <Text style={[styles.detailValue, { color: colors.text }]}>{section.reason}</Text>
-                        </View>
-                      )}
-                      {section.evidence?.length > 0 && (
-                        <View style={styles.detailBlock}>
-                          <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Bằng chứng:</Text>
-                          {section.evidence.map((e, i) => (
-                            <Text key={i} style={[styles.detailValue, { color: colors.text }]}>• {e}</Text>
-                          ))}
-                        </View>
-                      )}
-                      {section.missingData?.length > 0 && (
-                        <View style={styles.detailBlock}>
-                          <Text style={[styles.detailLabel, { color: '#ef4444' }]}>Dữ liệu thiếu:</Text>
-                          {section.missingData.map((m, i) => (
-                            <Text key={i} style={[styles.detailValue, { color: colors.secondaryText }]}>⚠ {m}</Text>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
 
         {/* Highlights (Strengths/Weaknesses) */}
         {(strengths.length > 0 || weaknesses.length > 0) && (
@@ -255,8 +335,8 @@ export default function AIEvaluationModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent={true}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerTitleRow}>
             <Sparkles size={24} color={colors.primary} />
@@ -269,7 +349,7 @@ export default function AIEvaluationModal({
 
         {renderContent()}
 
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity 
             onPress={onClose} 
             style={[styles.footerButton, { backgroundColor: colors.primary }]}
@@ -277,7 +357,7 @@ export default function AIEvaluationModal({
             <Text style={styles.footerButtonText}>Đã hiểu</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -304,14 +384,15 @@ const styles = StyleSheet.create({
   
   scoreContainer: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 25 },
   scoreCircle: { 
-    width: 90, 
-    height: 90, 
-    borderRadius: 45, 
+    width: 100, 
+    height: 100, 
+    borderRadius: 50, 
     borderWidth: 6, 
     alignItems: 'center', 
-    justifyContent: 'center' 
+    justifyContent: 'center',
+    padding: 10
   },
-  scoreValue: { fontSize: 32, fontWeight: '900' },
+  scoreValue: { fontSize: 24, fontWeight: '900' },
   scoreMax: { fontSize: 12, fontWeight: '700', marginTop: -2 },
   scoreMeta: { flex: 1 },
   projectName: { fontSize: 18, fontWeight: '800', marginBottom: 6 },

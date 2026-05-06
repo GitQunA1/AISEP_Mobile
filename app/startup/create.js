@@ -12,9 +12,11 @@ export default function CreateProjectPage() {
   const colors = activeTheme.colors;
 
   const handleSuccess = () => {
-    Alert.alert('Thành công', 'Dự án của bạn đã được gửi và đang chờ phê duyệt.', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)') }
-    ]);
+    Alert.alert(
+      'Thành công', 
+      'Dự án đã được tải lên thành công. Bắt đầu cung cấp thêm tài liệu cho dự án của bạn ở Bảng điều khiển Startup.', 
+      [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+    );
   };
 
   const handleClose = () => {

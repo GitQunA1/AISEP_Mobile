@@ -50,7 +50,17 @@ export default function PaymentModal({
     pollRef.current = setInterval(async () => {
       try {
         const status = await paymentService.getBookingPaymentStatus(bid);
-        if (status?.isPaid || status?.transactionStatus === 'Completed' || status?.bookingStatus === 'Confirmed') {
+        // console.log('[PaymentModal] Poll status:', status); // Debug logging
+
+        const isSuccess = 
+          status?.isPaid === true || 
+          status?.transactionStatus === 'Completed' || 
+          status?.bookingStatus === 'Confirmed' ||
+          status?.bookingStatus === 2 || // Numeric status for Confirmed
+          status?.status === 2 ||
+          status?.status === 'Confirmed';
+
+        if (isSuccess) {
           stopPolling();
           setPhase('success');
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -58,12 +68,12 @@ export default function PaymentModal({
             hasCalledPaid.current = true;
             onPaid?.();
           }
-        } else if (status?.transactionStatus === 'Failed') {
+        } else if (status?.transactionStatus === 'Failed' || status?.status === 'Failed') {
           stopPolling();
           setPhase('failed');
         }
-      } catch (_) {
-        // Silently ignore polling errors
+      } catch (err) {
+        // console.warn('[PaymentModal] Polling error:', err);
       }
     }, POLL_INTERVAL_MS);
   }, [stopPolling, onPaid]);
@@ -82,12 +92,23 @@ export default function PaymentModal({
     }
   }, [startPolling]);
 
+  const checkoutInitiated = useRef(null);
+
   useEffect(() => {
-    if (isVisible && bookingId) {
+    // Only initiate checkout if visible, we have a bookingId, 
+    // and we haven't already initiated it for THIS specific bookingId in this session.
+    if (isVisible && bookingId && checkoutInitiated.current !== bookingId && phase !== 'success') {
+      checkoutInitiated.current = bookingId;
       doCheckout(bookingId);
     }
+    
+    // Reset initiated ref when modal closes or bookingId changes
+    if (!isVisible) {
+      checkoutInitiated.current = null;
+    }
+
     return () => stopPolling();
-  }, [isVisible, bookingId, doCheckout, stopPolling]);
+  }, [isVisible, bookingId, doCheckout, stopPolling, phase]);
 
   const handleRetry = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

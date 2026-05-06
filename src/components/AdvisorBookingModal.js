@@ -31,6 +31,7 @@ export default function AdvisorBookingModal({
   advisor = null,
   initialAdvisorId = null,
   initialProjectId = null,
+  initialProject = null,
   sourceBookingId = null,
   onSuccess
 }) {
@@ -116,8 +117,11 @@ export default function AdvisorBookingModal({
             }
           }
 
-          // 1. Handle Pre-selected Project if initialProjectId is provided (and not already set by sourceBooking)
-          if (initialProjectId && !preSelectedProject) {
+          // 1. Handle Pre-selected Project
+          if (initialProject) {
+            preSelectedProject = initialProject;
+            setSelectedProject(initialProject);
+          } else if (initialProjectId && !preSelectedProject) {
             const allProjects = await bookingService.getProjectOptions();
             const found = allProjects.find(p => p.projectId === initialProjectId);
             if (found) {
@@ -597,7 +601,7 @@ export default function AdvisorBookingModal({
               )}
             </ScrollView>
 
-            <KeyboardAvoidingView behavior="padding">
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
               <View style={[styles.noteSection, { borderTopColor: colors.border }]}>
                 <Text allowFontScaling={false} style={[styles.noteLabel, { color: colors.text }]}>Ghi chú (tùy chọn)</Text>
                 <TextInput

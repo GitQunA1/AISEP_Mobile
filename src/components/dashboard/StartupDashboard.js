@@ -744,9 +744,16 @@ export default function StartupDashboard({ initialTab }) {
           setEditingProject(null);
         }}
         onSuccess={() => {
+          const wasNew = !editingProject;
           setShowProjectWizard(false);
           setEditingProject(null);
           fetchData();
+          if (wasNew) {
+            Alert.alert(
+              'Thành công', 
+              'Dự án đã được tải lên thành công. Bắt đầu cung cấp thêm tài liệu cho dự án của bạn ở Bảng điều khiển Startup.'
+            );
+          }
         }}
       />
 

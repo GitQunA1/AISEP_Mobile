@@ -13,17 +13,30 @@ const investorService = {
   getAllInvestors: async (queryParams = {}) => {
     try {
       const response = await apiClient.get('/api/Investor', { params: queryParams });
-      
-      if (response && response.data) {
-        return response.data;
-      }
-      return { items: [], totalCount: 0 };
+      return response?.data ?? response;
     } catch (error) {
        if (error?.statusCode === 404 || error?.response?.status === 404) {
           return { items: [], totalCount: 0 };
        }
        console.error('Error fetching all investors:', error);
        throw error;
+    }
+  },
+
+  /**
+   * Fetch matching investors for the current startup
+   * @returns {Promise<Object>} Object containing data.items
+   */
+  getMatchingInvestors: async () => {
+    try {
+      const response = await apiClient.get('/api/Investor/matching/startup');
+      return response?.data ?? response;
+    } catch (error) {
+      if (error?.statusCode === 404 || error?.response?.status === 404) {
+        return { items: [], totalCount: 0 };
+      }
+      console.error('Error fetching matching investors:', error);
+      throw error;
     }
   },
 
@@ -35,10 +48,7 @@ const investorService = {
   getInvestorById: async (investorId) => {
     try {
       const response = await apiClient.get(`/api/Investor/${investorId}`);
-      if (response && response.data) {
-        return response.data;
-      }
-      return null;
+      return response?.data ?? response;
     } catch (error) {
       if (error?.statusCode === 404 || error?.response?.status === 404) {
          return null;

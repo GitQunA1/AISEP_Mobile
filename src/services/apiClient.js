@@ -85,7 +85,7 @@ apiClient.interceptors.response.use(
             return apiClient(originalRequest);
           }
         } catch (refreshError) {
-          console.error('[ApiClient] Refresh failed', refreshError);
+          // Refresh failed
         }
       }
 
