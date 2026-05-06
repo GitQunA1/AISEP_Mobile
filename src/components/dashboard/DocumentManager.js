@@ -11,7 +11,7 @@ import Button from '../Button';
 export default function DocumentManager({ project, initialDocuments = [], onRefresh }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
-  
+
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -19,18 +19,18 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
 
   useEffect(() => {
     // Determine the actual array of documents
-    const docSource = Array.isArray(initialDocuments) 
-      ? initialDocuments 
+    const docSource = Array.isArray(initialDocuments)
+      ? initialDocuments
       : (initialDocuments?.items || (initialDocuments?.data?.items) || (initialDocuments ? [initialDocuments] : []));
-    
+
     // Check if it's really an array and not just a single object from a previous extraction mistake
     const docArray = Array.isArray(docSource) ? docSource : [];
-    
+
     if (docArray.length > 0) {
       const mappedDocs = docArray.map((doc, index) => ({
         id: doc.id || doc.documentId || `doc-${index}`,
         name: doc.fileName || doc.documentType || 'Tài liệu',
-// ...
+        // ...
         type: doc.documentType,
         uploadDate: new Date(doc.uploadedAt || doc.verifiedAt || new Date()).toLocaleDateString('vi-VN'),
         status: doc.blockchainTxHash ? 'verified' : 'pending',
@@ -55,7 +55,7 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
       const response = await projectSubmissionService.getDocuments(project.id || project.projectId);
       if (response && response.data) {
         const docItems = Array.isArray(response.data) ? response.data : (response.data.items || []);
-        
+
         const mappedDocs = docItems.map((doc, index) => ({
           id: doc.id || doc.documentId || `doc-${index}`,
           name: doc.fileName || doc.documentType || 'Tài liệu',
@@ -65,7 +65,7 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
           txHash: doc.blockchainTxHash,
           url: doc.fileUrl
         }));
-        
+
         setDocuments(mappedDocs);
         if (onDocumentsUpdate) onDocumentsUpdate(mappedDocs);
       }
@@ -90,7 +90,7 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
 
       if (result.canceled === false && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
-        
+
         // Ensure file size is acceptable (<10MB usually)
         if (file.size && file.size > 10 * 1024 * 1024) {
           Alert.alert('Lỗi', 'Kích thước tệp không được vượt quá 10MB.');
@@ -106,7 +106,7 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
 
   const uploadDocument = async (file) => {
     if (!project) return;
-    
+
     setIsUploading(true);
     try {
       // Create a native file object representation for FormData if needed
@@ -117,10 +117,10 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
       };
 
       // Default type for now, you could add a picker before upload
-      const docType = 'PitchDeck'; 
-      
+      const docType = 'PitchDeck';
+
       const res = await projectSubmissionService.uploadDocument(project.id || project.projectId, fileToUpload, docType);
-      
+
       if (res && (res.success || res.isSuccess)) {
         Alert.alert('Thành công', 'Tài liệu của bạn đã được tải lên thành công. Hệ thống AISEP sẽ thực hiện xác minh Blockchain tài liệu của bạn khi dự án được duyệt bởi Nhân viên vận hành.');
         loadDocuments();
@@ -139,12 +139,12 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
     setVerifyingDocId(docId);
     try {
       const res = await projectSubmissionService.verifyDocument(docId);
-        if (res && (res.success || res.isSuccess)) {
-          Alert.alert('Xác thực thành công', `Tài liệu đã được xác nhận trên blockchain.\nMã Tx: ${res.data.blockchainTxHash || res.data.txHash || 'N/A'}`);
-          loadDocuments();
-        } else {
-          Alert.alert('Chưa có thông tin', 'Tài liệu đã được tải lên nhưng chúng tôi sẽ sử dụng Blockchain để xác nhận sau khi dự án này được chấp thuận.');
-        }
+      if (res && (res.success || res.isSuccess)) {
+        Alert.alert('Xác thực thành công', `Tài liệu đã được xác nhận trên blockchain.\nMã Tx: ${res.data.blockchainTxHash || res.data.txHash || 'N/A'}`);
+        loadDocuments();
+      } else {
+        Alert.alert('Chưa có thông tin', 'Tài liệu đã được tải lên nhưng chúng tôi sẽ sử dụng Blockchain để xác nhận sau khi dự án này được chấp thuận.');
+      }
     } catch (error) {
       console.error('Verify error:', error);
       Alert.alert('Lỗi', 'Chưa có thông tin xác thực trên blockchain cho tài liệu này. Token sẽ được cấp khi dự án được duyệt.');
@@ -172,8 +172,8 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
       'Bạn có chắc chắn muốn xóa tài liệu này không?',
       [
         { text: 'Hủy', style: 'cancel' },
-        { 
-          text: 'Xóa', 
+        {
+          text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -200,13 +200,13 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
   return (
     <View style={styles.container}>
 
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.uploadDropzone, 
-          { 
-            borderColor: colors.border, 
+          styles.uploadDropzone,
+          {
+            borderColor: colors.border,
             backgroundColor: colors.card,
-            opacity: project?.status !== 'Draft' ? 0.6 : 1 
+            opacity: project?.status !== 'Draft' ? 0.6 : 1
           }
         ]}
         onPress={pickDocument}
@@ -259,8 +259,8 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
                 <TouchableOpacity onPress={() => openDocument(doc.url)} style={styles.actionBtn}>
                   <ExternalLink size={18} color={colors.secondaryText} />
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => verifyDocument(doc.id)} 
+                <TouchableOpacity
+                  onPress={() => verifyDocument(doc.id)}
                   style={styles.actionBtn}
                   disabled={verifyingDocId === doc.id}
                 >
@@ -270,8 +270,8 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
                     <Shield size={18} color={colors.success} />
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => deleteDocument(doc.id)} 
+                <TouchableOpacity
+                  onPress={() => deleteDocument(doc.id)}
                   disabled={project?.status !== 'Draft'}
                   style={styles.actionBtn}
                 >

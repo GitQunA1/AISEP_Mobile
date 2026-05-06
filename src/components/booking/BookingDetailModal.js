@@ -374,7 +374,7 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
               </TouchableOpacity>
             )}
 
-            {!existingReport && ['Startup', 'Investor'].includes(userRole) && [2, 'Confirmed'].includes(booking.status) && (
+            {!existingReport && ['Startup', 'Investor'].includes(userRole) && [2, 'Confirmed', 3, 'Completed'].includes(booking.status) && (
               <TouchableOpacity 
                 style={[styles.secondaryBtn, { borderColor: colors.error + '40' }]}
                 onPress={() => onAction('complain', booking)}

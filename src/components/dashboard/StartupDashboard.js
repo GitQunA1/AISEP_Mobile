@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSubscription } from '../../context/SubscriptionContext';
+import { InteractionManager } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Card from '../Card';
 import FadeInView from '../FadeInView';
@@ -271,8 +272,13 @@ export default function StartupDashboard({ initialTab }) {
   }, [user]);
 
   useEffect(() => {
-    if (activeTab === 'connections') fetchInvestorRequests();
-    if (activeTab === 'deals') fetchInvestmentDeals();
+    // Defer data fetching until after animations finish to prevent lag
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (activeTab === 'connections') fetchInvestorRequests();
+      if (activeTab === 'deals') fetchInvestmentDeals();
+      if (activeTab === 'profile') fetchData();
+    });
+    return () => task.cancel();
   }, [activeTab]);
 
   const onRefresh = () => {
@@ -310,17 +316,17 @@ export default function StartupDashboard({ initialTab }) {
   };
 
   const handlePagerScroll = (event) => {
-    // If we are moving due to a tab click, ignore all scroll events
+    // Only handle visual interpolation here (already handled by Animated.event)
+    // We avoid setting state here to keep 60fps
+  };
+
+  const handleMomentumScrollEnd = (event) => {
     if (isManualScrolling.current) return;
     
     const x = event.nativeEvent.contentOffset.x;
-    
-    // Only trigger state change if we are very close to a page center
-    // This avoids flickering during the swipe
     const tabIndex = Math.round(x / width);
-    const distanceToCenter = Math.abs(x - tabIndex * width);
     
-    if (distanceToCenter < 10 && tabIndex !== currentTabIndexRef.current && TABS[tabIndex]) {
+    if (tabIndex !== currentTabIndexRef.current && TABS[tabIndex]) {
       currentTabIndexRef.current = tabIndex;
       setActiveTab(TABS[tabIndex].id);
       
@@ -629,6 +635,7 @@ export default function StartupDashboard({ initialTab }) {
             listener: handlePagerScroll 
           }
         )}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
         scrollEventThrottle={16}
       >
         <View style={{ width }}>
@@ -725,7 +732,11 @@ export default function StartupDashboard({ initialTab }) {
         </View>
 
         <View style={{ width }}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView 
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={{ paddingBottom: 40 }}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          >
             {/* Subscription Quota Card */}
             <StartupProfileForm
               initialData={startupProfile}
@@ -752,6 +763,11 @@ export default function StartupDashboard({ initialTab }) {
             Alert.alert(
               'Thành công', 
               'Dự án đã được tải lên thành công. Bắt đầu cung cấp thêm tài liệu cho dự án của bạn ở Bảng điều khiển Startup.'
+            );
+          } else {
+            Alert.alert(
+              'Thành công', 
+              'Thông tin dự án đã được cập nhật thành công.'
             );
           }
         }}

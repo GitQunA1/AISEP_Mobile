@@ -43,7 +43,6 @@ export default function NotificationsScreen() {
     
     const handlePress = () => {
       markAsRead(item.notificationId);
-      handleNotificationAction(item);
     };
 
     return (
@@ -72,7 +71,6 @@ export default function NotificationsScreen() {
             <Text style={[styles.notifTime, { color: colors.secondaryText }]}>
               {formatDate(item.createdAt)}
             </Text>
-            <ChevronRight size={16} color={colors.border} />
           </View>
         </View>
       </TouchableOpacity>

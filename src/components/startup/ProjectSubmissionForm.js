@@ -56,12 +56,8 @@ const FormInput = ({ label, name, value, onChangeText, validationRule, currentSt
     const isOverLimit = maxLength && currentLength > maxLength;
     const isUnderLimit = minLength && currentLength > 0 && currentLength < minLength;
 
-    let isRequired = validationRule?.required;
-    if (currentStage !== null && currentStage !== undefined && validationRule?.stageOptionIds && validationRule.stageOptionIds.length > 0) {
-        const stageId = Number(currentStage);
-        const isStageInList = validationRule.stageOptionIds.some(id => Number(id) === stageId);
-        isRequired = isStageInList ? validationRule.required : !validationRule.required;
-    }
+    // Force all fields to be required regardless of API rules
+    const isRequired = true;
 
     const displayLabel = validationRule?.displayName || label || validationRule?.fieldKey || name;
 
@@ -139,7 +135,7 @@ const CustomSelect = ({ label, value, options, onValueChange, colors, error, opt
     return (
         <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.text }]}>
-                {label} {optional ? <Text style={styles.optional}>(Tùy chọn)</Text> : <Text style={{ color: colors.error }}>*</Text>}
+                {label} <Text style={{ color: colors.error }}>*</Text>
             </Text>
             <TouchableOpacity 
                 style={[
@@ -475,13 +471,22 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
         const newErrors = {};
 
         currentFields.forEach(name => {
-            const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
-            const rule = validationRules[ruleKey];
-            if (rule) {
-                const error = validationService.validateField(formData[name], rule, formData.developmentStage);
-                if (error) newErrors[name] = error;
+            const val = formData[name];
+            if (val === undefined || val === null || String(val).trim() === '') {
+                newErrors[name] = 'Trường này là bắt buộc nhập';
+            } else {
+                const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+                const rule = validationRules[ruleKey];
+                if (rule) {
+                    const error = validationService.validateField(val, rule, formData.developmentStage);
+                    if (error) newErrors[name] = error;
+                }
             }
         });
+
+        if (currentStep === 1 && !imagePreview) {
+            newErrors.projectImageFile = 'Vui lòng chọn hình ảnh dự án';
+        }
 
         if (currentStep === 3) {
             // Validate scorecard fields
@@ -542,9 +547,9 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
     const content = (
         <KeyboardAvoidingView 
             style={{ flex: 1, backgroundColor: colors.card }} 
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            enabled={true}
+            enabled={Platform.OS === 'ios' ? true : isKeyboardVisible}
         >
             {/* Header */}
             <View style={[
@@ -570,7 +575,11 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
             </View>
 
             <Animated.View style={{ flex: 1, transform: [{ translateX: slideAnim }] }}>
-                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <ScrollView 
+                    ref={scrollViewRef} 
+                    contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]} 
+                    keyboardShouldPersistTaps="handled"
+                >
                     {submitError ? (
                         <View style={[styles.errorBanner, { borderColor: colors.error }]}>
                             <AlertCircle size={20} color={colors.error} />
@@ -590,8 +599,8 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                                     <FormInput name="projectName" validationRule={validationRules?.['projectname']} currentStage={formData.developmentStage} label="Tên Dự Án" value={formData.projectName} onChangeText={handleInputChange} placeholder="Ví dụ: AI SEP" error={errors.projectName} colors={colors} />
                                     
                                     <View style={styles.formGroup}>
-                                        <Text style={[styles.label, { color: colors.text }]}>Hình Ảnh Dự Án <Text style={styles.optional}>(Tùy chọn)</Text></Text>
-                                        <TouchableOpacity style={[styles.imageUploadBtn, { borderColor: colors.border, backgroundColor: imagePreview ? 'transparent' : colors.mutedBackground }]} onPress={handleImagePick}>
+                                        <Text style={[styles.label, { color: colors.text }]}>Hình Ảnh Dự Án <Text style={{ color: colors.error }}>*</Text></Text>
+                                        <TouchableOpacity style={[styles.imageUploadBtn, { borderColor: errors.projectImageFile ? colors.error : colors.border, backgroundColor: imagePreview ? 'transparent' : colors.mutedBackground }]} onPress={handleImagePick}>
                                             {imagePreview ? (
                                                 <View style={{ width: '100%', height: 180, borderRadius: 12, overflow: 'hidden' }}>
                                                     <Image source={{ uri: imagePreview }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />

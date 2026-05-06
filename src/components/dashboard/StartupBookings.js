@@ -89,8 +89,10 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
       const response = await bookingService.getMyCustomerBookings('', '-Id', 1, 100);
       const items = response?.items ?? (Array.isArray(response) ? response : []);
       setBookings(items);
+      return items; // Return items for chaining
     } catch (error) {
       console.error('[StartupBookings] Failed to load bookings:', error);
+      return [];
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -129,6 +131,20 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     }
     if (type === 'rebook') onAction?.('rebook', item);
     if (type === 'pay') onAction?.('pay', item);
+    
+    // If the detail modal is already open and we're just refreshing data
+    if (type === 'refresh') {
+      loadBookings(true).then(newItems => {
+        // If the detail modal is showing this booking, find the LATEST version from the server
+        if (selectedBooking) {
+          const bookingId = selectedBooking.id || selectedBooking.bookingId;
+          const updated = newItems.find(b => (b.id || b.bookingId) === bookingId);
+          if (updated) {
+            setSelectedBooking({ ...updated }); // Force reference change
+          }
+        }
+      });
+    }
   };
 
   const filteredBookings = bookings.filter(b => {
@@ -384,6 +400,10 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
         <ConsultingReportModal
           isVisible={showReportModal}
           onClose={() => setShowReportModal(false)}
+          onSuccess={(updatedBooking) => {
+            setShowReportModal(false);
+            handleAction('refresh', updatedBooking || selectedBooking);
+          }}
           bookingId={selectedBooking?.id || selectedBooking?.bookingId}
           userRole="Startup"
           advisorName={selectedBooking?.advisorName}
@@ -396,6 +416,10 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
           onClose={() => {
             setShowComplaintModal(false);
             setViewOnlyComplaint(null);
+          }}
+          onSuccess={() => {
+            setShowComplaintModal(false);
+            handleAction('refresh', selectedBooking);
           }}
           bookingId={selectedBooking?.id || selectedBooking?.bookingId}
           targetUserId={selectedBooking?.advisorId}

@@ -12,14 +12,33 @@ export const enumService = {
    */
   getEnumOptions: async (enumName) => {
     try {
+      // Special handling for Industry and Stage which are separate entities, not simple Enums
+      if (enumName === 'Industry') {
+        const response = await apiClient.get('/api/industry-options', { params: { pageSize: 100 } });
+        const items = Array.isArray(response?.data) ? response.data : (response?.data?.items || []);
+        return items.map(item => ({
+          label: item.value || item.name || 'Unknown Industry',
+          value: item.id
+        }));
+      }
+
+      if (enumName === 'DevelopmentStage' || enumName === 'Stage') {
+        const response = await apiClient.get('/api/stage-options', { params: { pageSize: 100 } });
+        const items = Array.isArray(response?.data) ? response.data : (response?.data?.items || []);
+        return items.map(item => ({
+          label: item.value || item.name || 'Unknown Stage',
+          value: item.id
+        }));
+      }
+
+      // Default logic for true Enums (like Status, Role, etc.)
       const response = await apiClient.get('/api/Enum/enums', {
         params: { enumName }
       });
-      // The backend returns the list of enum options in the data field
       return response?.data || [];
     } catch (error) {
       console.error(`Error fetching enum ${enumName}:`, error);
-      return []; // Return empty array on error to prevent app crashes
+      return [];
     }
   }
 };

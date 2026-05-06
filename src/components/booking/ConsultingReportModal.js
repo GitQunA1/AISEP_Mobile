@@ -15,7 +15,7 @@ import Button from '../Button';
 
 const { width } = Dimensions.get('window');
 
-export default function ConsultingReportModal({ isVisible, onClose, bookingId, userRole, advisorName, onDone }) {
+export default function ConsultingReportModal({ isVisible, onClose, bookingId, userRole, advisorName, onSuccess }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
   const isAdvisor = userRole === 'Advisor';
@@ -99,7 +99,7 @@ export default function ConsultingReportModal({ isVisible, onClose, bookingId, u
       const r = await consultingReportService.createReport(data);
       setReport(r);
       setPhase('success');
-      onDone?.();
+      onSuccess?.(r);
     } catch (e) {
       Alert.alert('Lỗi', e?.message || 'Không thể nộp báo cáo.');
     } finally {
@@ -112,7 +112,7 @@ export default function ConsultingReportModal({ isVisible, onClose, bookingId, u
     try {
       await consultingReportService.approveReport(report.consultingReportId);
       setPhase('success');
-      onDone?.();
+      onSuccess?.();
     } catch (e) {
       Alert.alert('Lỗi', e?.message || 'Không thể chấp nhận báo cáo.');
     } finally {
@@ -129,7 +129,7 @@ export default function ConsultingReportModal({ isVisible, onClose, bookingId, u
     try {
       await consultingReportService.requestRevision(report.consultingReportId, revisionReason.trim());
       onClose();
-      onDone?.();
+      onSuccess?.();
     } catch (e) {
       Alert.alert('Lỗi', e?.message || 'Không thể gửi yêu cầu sửa đổi.');
     } finally {

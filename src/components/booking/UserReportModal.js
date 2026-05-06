@@ -17,16 +17,18 @@ import userReportService from '../../services/userReportService';
 const { width } = Dimensions.get('window');
 
 const REPORT_CATEGORIES = [
-  { value: 'UnprofessionalBehavior', label: 'Hành vi thiếu chuyên nghiệp' },
-  { value: 'Harassment', label: 'Quấy rối' },
-  { value: 'Scam', label: 'Dấu hiệu lừa đảo' },
-  { value: 'Impersonation', label: 'Mạo danh' },
+  { value: 'ServiceQuality', label: 'Chất lượng tư vấn không tốt' },
+  { value: 'NoShow', label: 'Cố vấn không xuất hiện' },
+  { value: 'LateOrShortSession', label: 'Đi muộn hoặc kết thúc sớm' },
+  { value: 'UnprofessionalConduct', label: 'Thái độ thiếu chuyên nghiệp' },
+  { value: 'ScopeNotMet', label: 'Không đúng nội dung cam kết' },
+  { value: 'PaymentIssue', label: 'Vấn đề thanh toán' },
   { value: 'InappropriateContent', label: 'Nội dung không phù hợp' },
-  { value: 'Other', label: 'Tranh chấp thanh toán / Lý do khác' },
+  { value: 'Other', label: 'Lý do khác' },
 ];
 
 export default function UserReportModal({ 
-  isVisible, onClose, bookingId, targetUserId, targetUserName, onDone, viewOnlyReport = null 
+  isVisible, onClose, bookingId, targetUserId, targetUserName, onSuccess, viewOnlyReport = null 
 }) {
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
@@ -164,7 +166,7 @@ export default function UserReportModal({
             </Text>
             <TouchableOpacity 
               style={[styles.doneBtn, { backgroundColor: colors.primary }]} 
-              onPress={() => { onClose(); onDone?.(); }}
+              onPress={() => { onClose(); onSuccess?.(); }}
             >
               <Text style={{ color: '#fff', fontWeight: '800' }}>Đã hiểu</Text>
             </TouchableOpacity>
@@ -367,8 +369,8 @@ const styles = StyleSheet.create({
   footer: { padding: 20, paddingBottom: 34, borderTopWidth: 1 },
   submitBtn: { height: 54, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  successTitle: { fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 12 },
-  mutedText: { fontSize: 14, lineHeight: 22 },
+  successTitle: { fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 12, textAlign: 'center' },
+  mutedText: { fontSize: 14, lineHeight: 22, textAlign: 'center' },
   doneBtn: { paddingHorizontal: 40, paddingVertical: 14, borderRadius: 14, marginTop: 32 },
   statusBox: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 14, borderWidth: 1, marginBottom: 24, alignItems: 'center' },
   statusBoxTitle: { fontSize: 15, fontWeight: '800' },

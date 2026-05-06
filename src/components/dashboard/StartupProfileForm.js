@@ -71,15 +71,22 @@ export default function StartupProfileForm({ initialData, user, onSuccess }) {
 
   useEffect(() => {
     if (initialData && !isConfigLoading) {
-      let industryVal = 0;
-      if (initialData.industry !== undefined && initialData.industry !== null) {
-        const indString = String(initialData.industry).toLowerCase();
+      // 1. Backend returns "industries": ["Name"] as seen in API response
+      const rawInds = initialData.industries || initialData.Industries;
+      const rawInd = (Array.isArray(rawInds) && rawInds.length > 0) ? rawInds[0] : (initialData.industry ?? initialData.Industry);
+
+      let industryVal = '';
+      if (rawInd !== undefined && rawInd !== null) {
+        const indString = String(rawInd).toLowerCase();
+        // 2. Try to find a match in the industries list by ID or Label
         const matched = industries.find(i => 
-          String(i.value) === indString || 
+          String(i.value).toLowerCase() === indString || 
           i.label.toLowerCase() === indString ||
-          i.label.toLowerCase().replace(/ /g, '_') === indString
+          i.label.toLowerCase().replace(/ /g, '_') === indString ||
+          i.label.toLowerCase().replace(/_/g, ' ') === indString
         );
-        industryVal = matched ? Number(matched.value) : 0;
+        // 3. Prefer the value (ID) if matched, otherwise keep raw label
+        industryVal = matched ? matched.value : rawInd;
       }
 
       setFormData({
@@ -270,7 +277,8 @@ export default function StartupProfileForm({ initialData, user, onSuccess }) {
           </Text>
           <View style={styles.industryGrid}>
             {industries.map((ind) => {
-              const isSelected = formData.industry === Number(ind.value);
+              const isSelected = String(formData.industry) === String(ind.value) || 
+                                String(formData.industry).toLowerCase() === String(ind.label).toLowerCase();
               return (
                 <TouchableOpacity
                   key={ind.value}
@@ -281,7 +289,7 @@ export default function StartupProfileForm({ initialData, user, onSuccess }) {
                       backgroundColor: isSelected ? colors.primary : 'transparent'
                     }
                   ]}
-                  onPress={() => setFormData(p => ({ ...p, industry: Number(ind.value) }))}
+                  onPress={() => setFormData(p => ({ ...p, industry: ind.value }))}
                 >
                   <Text style={[
                      styles.industryText,

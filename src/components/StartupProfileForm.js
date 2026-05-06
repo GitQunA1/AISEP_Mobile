@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { Check, AlertCircle, Building2, User, Phone, Globe } from 'lucide-react-native';
 import startupProfileService from '../services/startupProfileService';
 import enumService from '../services/enumService';
@@ -28,6 +28,7 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
   const [errors, setErrors] = useState({});
   const [validationRules, setValidationRules] = useState(null);
   const [industries, setIndustries] = useState([]);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const fetchConfig = async () => {
     try {
@@ -54,6 +55,16 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
 
   useEffect(() => {
     fetchConfig();
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -178,12 +189,18 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
   }
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]} 
-      showsVerticalScrollIndicator={false}
-      bounces={false}
-      overScrollMode="never"
+    <KeyboardAvoidingView 
+      style={{ flex: 1 }} 
+      behavior="padding"
+      enabled={Platform.OS === 'ios' ? true : isKeyboardVisible}
     >
+      <ScrollView 
+        style={[styles.container, { backgroundColor: colors.background }]} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+      >
       <View style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.shadow }]}>
         <Text style={[styles.title, { color: colors.text }]}>{initialData ? 'Cập nhật Profile' : 'Tạo Hồ sơ Startup'}</Text>
         <Text style={[styles.subtitle, { color: colors.secondaryText }]}>Điền thông tin doanh nghiệp của bạn</Text>
@@ -302,7 +319,8 @@ export default function StartupProfileForm({ initialData, user, onSuccess, onCan
         </View>
       </View>
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

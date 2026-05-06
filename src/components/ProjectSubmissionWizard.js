@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  ScrollView, ActivityIndicator, Alert, Animated, Image, Dimensions, Platform, StatusBar
+  ScrollView, ActivityIndicator, Alert, Animated, Image, Dimensions, Platform, StatusBar,
+  KeyboardAvoidingView, Keyboard
 } from 'react-native';
 import { 
   ArrowRight, ArrowLeft, Check, AlertCircle, X, 
@@ -36,6 +37,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
   const [industries, setIndustries] = useState([]);
   const [stages, setStages] = useState([]);
 
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [formData, setFormData] = useState({
     // Step 1: Basic
     projectName: '',
@@ -107,7 +109,17 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
 
   useEffect(() => {
     fetchConfig();
-  }, [initialData]);
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (initialData && !isConfigLoading) {
@@ -581,13 +593,17 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
   };
 
   return (
-    <View style={[
-      styles.container, 
-      { 
-        backgroundColor: colors.background, 
-        paddingTop: Platform.OS === 'ios' ? insets.top : (StatusBar.currentHeight || 0) + 10 
-      }
-    ]}>
+    <KeyboardAvoidingView 
+      style={[
+        styles.container, 
+        { 
+          backgroundColor: colors.background, 
+          paddingTop: Platform.OS === 'ios' ? insets.top : (StatusBar.currentHeight || 0) + 10 
+        }
+      ]}
+      behavior="padding"
+      enabled={Platform.OS === 'ios' ? true : isKeyboardVisible}
+    >
       <View style={[styles.progressHeader, { borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
@@ -606,7 +622,11 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollContent} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
         {isConfigLoading ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -674,7 +694,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
           )}
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -724,11 +744,9 @@ const styles = StyleSheet.create({
   footer: { 
     flexDirection: 'row', 
     paddingHorizontal: 20, 
-    paddingVertical: 8, 
+    paddingVertical: 12, 
     borderTopWidth: 1, 
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 0,
     width: '100%',
   },
   navBtn: { flexDirection: 'row', alignItems: 'center', padding: 10 },

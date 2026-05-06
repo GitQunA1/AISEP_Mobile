@@ -16,24 +16,25 @@ import DocumentManager from './DocumentManager';
 import Button from '../Button';
 import Card from '../Card';
 import projectSubmissionService from '../../services/projectSubmissionService';
+import enumService from '../../services/enumService';
 import advisorService from '../../services/advisorService';
 import AdvisorBookingModal from '../AdvisorBookingModal';
 import AIEvaluationService from '../../services/AIEvaluationService';
 import AIEvaluationModal from '../common/AIEvaluationModal';
 import QuotaGuardModal from '../common/QuotaGuardModal';
 import DueDiligenceModal from '../startup/DueDiligenceModal';
-import { 
-  getProjectScorecardFromProject, 
-  getScorecardOptionLabel, 
-  TEAM_SIZE, 
-  TEAM_EXPERIENCE, 
-  TARGET_MARKET_SIZE, 
-  MARKET_GROWTH, 
-  PRODUCT_READINESS, 
-  IP_PROTECTION, 
-  BARRIER_TO_ENTRY, 
-  CURRENT_TRACTION, 
-  RUNWAY_MONTHS 
+import {
+  getProjectScorecardFromProject,
+  getScorecardOptionLabel,
+  TEAM_SIZE,
+  TEAM_EXPERIENCE,
+  TARGET_MARKET_SIZE,
+  MARKET_GROWTH,
+  PRODUCT_READINESS,
+  IP_PROTECTION,
+  BARRIER_TO_ENTRY,
+  CURRENT_TRACTION,
+  RUNWAY_MONTHS
 } from '../../constants/projectScorecard';
 
 const { width } = Dimensions.get('window');
@@ -49,17 +50,45 @@ const getStatusConfig = (status, colors) => {
   return configs[status] || configs.Draft;
 };
 
-const getStageLabel = (stage) => {
-  const stages = { 
-    'idea': 'Ý tưởng', 
-    'mvp': 'MVP', 
+const getStageLabel = (stage, project = {}, options = []) => {
+  // 1. Try to get label from the backend-provided objects/fields (exhaustive casing check)
+  const label = project.stageOption?.label || 
+                project.StageOption?.Label ||
+                project.stageOption?.name ||
+                project.StageOption?.Name ||
+                project.developmentStageName || 
+                project.DevelopmentStageName ||
+                project.stageName || 
+                project.StageName ||
+                project.developmentStageOption?.label ||
+                project.DevelopmentStageOption?.Label;
+                
+  if (label) return label;
+
+  // 2. Try to find in dynamically fetched options
+  if (options && options.length > 0) {
+    const found = options.find(opt => String(opt.value) === String(stage));
+    if (found) return found.label;
+  }
+
+  // 3. Local fallback map
+  const stages = {
+    'idea': 'Ý tưởng',
+    'mvp': 'MVP',
     'growth': 'Tăng trưởng',
+    'seed': 'Hạt giống (Seed)',
+    'seriesa': 'Series A',
     '0': 'Ý tưởng',
     '1': 'MVP',
     '2': 'Tăng trưởng'
   };
-  const s = String(stage || '').toLowerCase();
-  return stages[s] || stage || 'Không xác định';
+  const s = String(stage ?? '').toLowerCase();
+  
+  if (stages[s]) return stages[s];
+  if (typeof stage === 'string' && stage.length > 0 && !/^\d+$/.test(stage)) return stage;
+  if (stage !== null && stage !== undefined) return `Giai đoạn ${stage}`;
+  
+  return 'Chưa xác định';
 };
 
 const parseTeamMembers = (text) => {
@@ -72,6 +101,14 @@ const parseTeamMembers = (text) => {
     }
     return { name: m, role: 'Thành viên' };
   });
+};
+
+const getPotentialLabel = (score) => {
+  const s = Number(score) || 0;
+  if (s >= 80) return 'Dự án tiềm năng rất cao';
+  if (s >= 60) return 'Dự án có tiềm năng cao';
+  if (s >= 40) return 'Tiềm năng trung bình';
+  return 'Dự án cần cải thiện thêm';
 };
 
 export default function DashboardProjectDetail({ visible, project, onClose, onRefresh, onEdit }) {
@@ -94,8 +131,27 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   const [showAIResultModal, setShowAIResultModal] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showDueDiligenceModal, setShowDueDiligenceModal] = useState(false);
+  const [enumOptions, setEnumOptions] = useState({ stages: [], industries: [] });
 
   const scorecard = getProjectScorecardFromProject(fullData);
+
+  const fetchEnums = async () => {
+    try {
+      const [sData, iData] = await Promise.all([
+        enumService.getEnumOptions('DevelopmentStage'),
+        enumService.getEnumOptions('Industry')
+      ]);
+      setEnumOptions({ stages: sData || [], industries: iData || [] });
+    } catch (err) {
+      console.log('Error fetching enums:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (visible) {
+      fetchEnums();
+    }
+  }, [visible]);
 
   const fetchFullDetails = async () => {
     if (!project?.id && !project?.projectId) return;
@@ -237,8 +293,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
       icon: <Lightbulb size={20} color={colors.accentCyan} />,
       accent: colors.accentCyan,
       fields: [
-        { label: 'Lĩnh vực', value: fullData.industries?.join(', ') || fullData.industry || (fullData.industryOption?.value) || 'Chưa xác định', icon: <Briefcase size={14} color={colors.accentCyan} /> },
-        { label: 'Giai đoạn', value: getStageLabel(fullData.stageOptionId ?? fullData.developmentStage ?? fullData.stage), icon: <TrendingUp size={14} color={colors.accentCyan} /> },
+        { label: 'Lĩnh vực', value: fullData.industries?.join(', ') || enumOptions.industries.find(o => String(o.value) === String(fullData.industryOptionId || fullData.industry))?.label || fullData.industryOption?.label || fullData.industry || fullData.industryName || 'Chưa xác định', icon: <Briefcase size={14} color={colors.accentCyan} /> },
+        { label: 'Giai đoạn', value: getStageLabel(fullData.stageOptionId ?? fullData.developmentStage ?? fullData.stage, fullData, enumOptions.stages), icon: <TrendingUp size={14} color={colors.accentCyan} /> },
         { label: 'Mô tả ngắn', value: fullData.shortDescription || fullData.description },
         { label: 'Vấn đề', value: fullData.problemStatement || fullData.problemDescription },
         { label: 'Giải pháp', value: fullData.solutionDescription || fullData.proposedSolution || fullData.solution },
@@ -355,7 +411,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                 {aiAnalysis ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                     <View style={[styles.scoreCircle, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '30' }]}>
-                      <Text 
+                      <Text
                         style={[styles.scoreValue, { color: colors.primary }]}
                         numberOfLines={1}
                         adjustsFontSizeToFit
@@ -365,7 +421,9 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                       <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.aiSummaryTitle, { color: colors.text }]}>Dự án có tiềm năng cao</Text>
+                      <Text style={[styles.aiSummaryTitle, { color: colors.text }]}>
+                        {getPotentialLabel(aiAnalysis.potentialScore || aiAnalysis.score)}
+                      </Text>
                       <Text style={[styles.aiSummaryText, { color: colors.secondaryText }]} numberOfLines={2}>
                         Bản phân tích gần nhất: {new Date(aiAnalysis.createdAt || Date.now()).toLocaleDateString('vi-VN')}
                       </Text>

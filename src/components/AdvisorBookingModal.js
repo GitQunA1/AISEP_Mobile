@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, Platform,
-  ScrollView, KeyboardAvoidingView, Pressable, Dimensions, Image, FlatList
+  ScrollView, KeyboardAvoidingView, Pressable, Dimensions, Image, FlatList, Keyboard
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -73,6 +73,7 @@ export default function AdvisorBookingModal({
   const [createdBooking, setCreatedBooking] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [useFreeBooking, setUseFreeBooking] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   // -- INITIALIZATION --
   useEffect(() => {
@@ -159,6 +160,16 @@ export default function AdvisorBookingModal({
       };
       init();
     }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, [isVisible, targetAdvisorId, initialProjectId, sourceBookingId]);
 
   // -- DATA FETCHING --
@@ -601,7 +612,10 @@ export default function AdvisorBookingModal({
               )}
             </ScrollView>
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView 
+              behavior="padding"
+              enabled={Platform.OS === 'ios' ? true : isKeyboardVisible}
+            >
               <View style={[styles.noteSection, { borderTopColor: colors.border }]}>
                 <Text allowFontScaling={false} style={[styles.noteLabel, { color: colors.text }]}>Ghi chú (tùy chọn)</Text>
                 <TextInput
