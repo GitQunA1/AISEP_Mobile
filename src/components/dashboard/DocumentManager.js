@@ -7,6 +7,7 @@ import projectSubmissionService from '../../services/projectSubmissionService';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../Card';
 import Button from '../Button';
+import BlockchainVerificationModal from '../common/BlockchainVerificationModal';
 
 export default function DocumentManager({ project, initialDocuments = [], onRefresh }) {
   const { activeTheme } = useTheme();
@@ -16,6 +17,12 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [verifyingDocId, setVerifyingDocId] = useState(null);
+
+  // Blockchain Modal State
+  const [showBlockchainModal, setShowBlockchainModal] = useState(false);
+  const [blockchainData, setBlockchainData] = useState(null);
+  const [blockchainError, setBlockchainError] = useState(null);
+  const [currentDocName, setCurrentDocName] = useState('');
 
   useEffect(() => {
     // Determine the actual array of documents
@@ -135,19 +142,26 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
     }
   };
 
-  const verifyDocument = async (docId) => {
+  const verifyDocument = async (docId, fileName) => {
     setVerifyingDocId(docId);
+    setCurrentDocName(fileName);
+    setBlockchainError(null);
+    setBlockchainData(null);
+    
     try {
       const res = await projectSubmissionService.verifyDocument(docId);
       if (res && (res.success || res.isSuccess)) {
-        Alert.alert('Xác thực thành công', `Tài liệu đã được xác nhận trên blockchain.\nMã Tx: ${res.data.blockchainTxHash || res.data.txHash || 'N/A'}`);
+        setBlockchainData(res);
+        setShowBlockchainModal(true);
         loadDocuments();
       } else {
-        Alert.alert('Chưa có thông tin', 'Tài liệu đã được tải lên nhưng chúng tôi sẽ sử dụng Blockchain để xác nhận sau khi dự án này được chấp thuận.');
+        setBlockchainError('Tài liệu đã được tải lên nhưng chúng tôi sẽ sử dụng Blockchain để xác nhận sau khi dự án này được chấp thuận.');
+        setShowBlockchainModal(true);
       }
     } catch (error) {
       console.error('Verify error:', error);
-      Alert.alert('Lỗi', 'Chưa có thông tin xác thực trên blockchain cho tài liệu này. Token sẽ được cấp khi dự án được duyệt.');
+      setBlockchainError('Chưa có thông tin xác thực trên blockchain cho tài liệu này. Token sẽ được cấp khi dự án được duyệt.');
+      setShowBlockchainModal(true);
     } finally {
       setVerifyingDocId(null);
     }
@@ -260,14 +274,14 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
                   <ExternalLink size={18} color={colors.secondaryText} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => verifyDocument(doc.id)}
+                  onPress={() => verifyDocument(doc.id, doc.name)}
                   style={styles.actionBtn}
                   disabled={verifyingDocId === doc.id}
                 >
                   {verifyingDocId === doc.id ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
-                    <Shield size={18} color={colors.success} />
+                    <Shield size={18} color={doc.status === 'verified' ? colors.success : colors.secondaryText} />
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -282,6 +296,19 @@ export default function DocumentManager({ project, initialDocuments = [], onRefr
           ))
         )}
       </View>
+
+      <BlockchainVerificationModal 
+        isOpen={showBlockchainModal} 
+        verificationData={blockchainData} 
+        isLoading={verifyingDocId !== null && !blockchainData && !blockchainError} 
+        error={blockchainError} 
+        projectName={currentDocName}
+        onClose={() => {
+          setShowBlockchainModal(false);
+          setBlockchainData(null);
+          setBlockchainError(null);
+        }} 
+      />
     </View>
   );
 }

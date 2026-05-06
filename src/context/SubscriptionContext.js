@@ -17,6 +17,7 @@ export function SubscriptionProvider({ children }) {
   const [subscription, setSubscription] = useState(null);
   const [packages, setPackages] = useState([]);
   const [startupProfile, setStartupProfile] = useState(null);
+  const [bonusQuota, setBonusQuota] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [lastFetched, setLastFetched] = useState(null);
 
@@ -55,7 +56,7 @@ export function SubscriptionProvider({ children }) {
 
     // Free Bookings
     remainingFreeBookings: Number(subscription?.remainingFreeBookings ?? 0),
-    bonusFreeBookings: Number(subscription?.bonusFreeBookings ?? 0),
+    bonusFreeBookings: Number(subscription?.bonusFreeBookings ?? bonusQuota ?? 0),
     get totalFreeBookings() {
       return this.remainingFreeBookings + this.bonusFreeBookings;
     },
@@ -75,10 +76,11 @@ export function SubscriptionProvider({ children }) {
 
     setIsLoading(true);
     try {
-      const [subData, pkgData, profileData] = await Promise.all([
+      const [subData, pkgData, profileData, bonusQuotaData] = await Promise.all([
         subscriptionService.getMySubscription(),
         isStartup ? paymentService.getStartupPackages() : paymentService.getInvestorPackages(),
         isStartup ? startupProfileService.getStartupMe() : Promise.resolve(null),
+        subscriptionService.getBonusQuota(),
       ]);
 
       // Normalize subscription - handle data wrapper
@@ -93,6 +95,7 @@ export function SubscriptionProvider({ children }) {
       setSubscription(finalSub);
       setPackages(finalPkgs);
       setStartupProfile(profileData);
+      setBonusQuota(Number(bonusQuotaData ?? 0));
       setLastFetched(now);
     } catch (err) {
       console.error('[SubscriptionContext] Failed to fetch subscription:', err);

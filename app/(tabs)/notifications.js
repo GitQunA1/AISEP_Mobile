@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { 
-  View, Text, StyleSheet, FlatList, 
-  TouchableOpacity, ActivityIndicator, RefreshControl 
+import {
+  View, Text, StyleSheet, FlatList,
+  TouchableOpacity, ActivityIndicator, RefreshControl
 } from 'react-native';
 import { Bell, CheckCircle2, Trash2, BellOff, ChevronRight } from 'lucide-react-native';
 import { useNotifications } from '../../src/context/NotificationContext';
@@ -12,9 +12,9 @@ import notificationService from '../../src/services/notificationService';
 import Card from '../../src/components/Card';
 
 export default function NotificationsScreen() {
-  const { 
-    notifications, unreadCount, markAsRead, markAllAsRead, 
-    loading, fetchNotifications, handleNotificationAction 
+  const {
+    notifications, unreadCount, markAsRead, markAllAsRead,
+    loading, fetchNotifications, handleNotificationAction
   } = useNotifications();
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
@@ -28,27 +28,27 @@ export default function NotificationsScreen() {
     const date = new Date(dateStr);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Vừa xong';
     if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours} giờ trước`;
-    
+
     return date.toLocaleDateString('vi-VN');
   };
 
   const renderItem = ({ item }) => {
     const style = notificationService.getNotificationStyle(item);
-    
+
     const handlePress = () => {
       markAsRead(item.notificationId);
     };
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.notifItem, 
+          styles.notifItem,
           { borderBottomColor: colors.border },
           !item.isRead && { backgroundColor: colors.primary + '08' }
         ]}
@@ -88,8 +88,8 @@ export default function NotificationsScreen() {
             </Text>
           </View>
           {notifications.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.markAllBtn, { backgroundColor: colors.primary + '15' }]} 
+            <TouchableOpacity
+              style={[styles.markAllBtn, { backgroundColor: colors.primary + '15' }]}
               onPress={markAllAsRead}
             >
               <CheckCircle2 size={18} color={colors.primary} />
@@ -120,7 +120,7 @@ export default function NotificationsScreen() {
             <Text style={[styles.emptySubtitle, { color: colors.secondaryText }]}>
               Bạn không có thông báo nào vào lúc này.
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.refreshBtn, { backgroundColor: colors.primary }]}
               onPress={fetchNotifications}
             >
@@ -142,14 +142,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  title: { fontSize: 32, fontWeight: '900', letterSpacing: -1 },
-  subtitle: { fontSize: 14, fontWeight: '500', marginTop: 4 },
-  markAllBtn: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  title: { fontSize: 24, fontWeight: '800' },
+  subtitle: { fontSize: 13, fontWeight: '400', marginTop: 2, lineHeight: 18 },
+  markAllBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   listContent: { paddingBottom: 40 },
   notifItem: {

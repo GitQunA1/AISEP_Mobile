@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, Text, StyleSheet, FlatList, TextInput, 
-  TouchableOpacity, RefreshControl, Animated, 
-  ActivityIndicator, Platform 
+import {
+  View, Text, StyleSheet, FlatList, TextInput,
+  TouchableOpacity, RefreshControl, Animated,
+  ActivityIndicator, Platform
 } from 'react-native';
 import { Search, Plus, Users, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,7 +41,7 @@ export default function AdvisorsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [myBookings, setMyBookings] = useState([]);
-  
+
   // Search Bar Animation
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
@@ -100,13 +100,13 @@ export default function AdvisorsScreen() {
     const searchLower = searchQuery.toLowerCase();
     const matchesName = (advisor.userName?.toLowerCase() || '').includes(searchLower);
     const matchesExpertise = (advisor.expertise?.toLowerCase() || '').includes(searchLower);
-    
+
     const industriesStr = Array.isArray(advisor.industries) ? advisor.industries.join(' ') : (advisor.industries || '');
     const matchesIndustries = industriesStr.toLowerCase().includes(searchLower);
-    
+
     const skillsStr = Array.isArray(advisor.skills) ? advisor.skills.join(' ') : (advisor.skills || '');
     const matchesSkills = skillsStr.toLowerCase().includes(searchLower);
-    
+
     return matchesName || matchesExpertise || matchesIndustries || matchesSkills;
   });
 
@@ -145,10 +145,10 @@ export default function AdvisorsScreen() {
         {/* Unified SEARCH BAR with Home's filter/input style */}
         <View style={styles.searchSection}>
           <Animated.View style={[
-            styles.searchContainer, 
-            { 
-              backgroundColor: colors.inputBackground, 
-              borderColor: borderColor 
+            styles.searchContainer,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: borderColor
             }
           ]}>
             <Search size={16} color={colors.secondaryText} style={{ marginRight: 8 }} />
@@ -164,7 +164,7 @@ export default function AdvisorsScreen() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={10}>
-                  <X size={16} color={colors.secondaryText} />
+                <X size={16} color={colors.secondaryText} />
               </TouchableOpacity>
             )}
           </Animated.View>
@@ -176,8 +176,8 @@ export default function AdvisorsScreen() {
           renderItem={({ item }) => isLoading ? (
             <AdvisorSkeletonCard />
           ) : (
-            <AdvisorCard 
-              advisor={item} 
+            <AdvisorCard
+              advisor={item}
               user={user}
               bookingStatus={getBookingStatus(item.advisorId)}
               onViewProfile={(id) => router.push(`/advisor/${id}`)}
@@ -192,11 +192,11 @@ export default function AdvisorsScreen() {
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
-              <RefreshControl 
-                  refreshing={isRefreshing} 
-                  onRefresh={onRefresh} 
-                  tintColor={colors.primary}
-              />
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
           }
           ListEmptyComponent={
             !isLoading && (
@@ -223,7 +223,7 @@ export default function AdvisorsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
     paddingTop: 10, // Match Home's container paddingTop
   },
@@ -269,42 +269,42 @@ const styles = StyleSheet.create({
     marginTop: 0, // Match FeedHeader's subtitle gap
     lineHeight: 18,
   },
-  searchSection: { 
+  searchSection: {
     paddingHorizontal: 20,
     marginBottom: 12,
   },
-  searchContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderRadius: 24, 
-    paddingHorizontal: 16, 
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 11 : 4,
     borderWidth: 1.5,
   },
-  searchInput: { 
-    flex: 1, 
+  searchInput: {
+    flex: 1,
     fontSize: 14,
   },
-  list: { 
+  list: {
     paddingBottom: 100,
     paddingTop: 8,
   },
   separator: {
     height: 12,
   },
-  emptyState: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 80,
     paddingHorizontal: 40,
   },
-  emptyTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     marginTop: 16,
   },
-  emptySubtitle: { 
-    fontSize: 14, 
+  emptySubtitle: {
+    fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
   },

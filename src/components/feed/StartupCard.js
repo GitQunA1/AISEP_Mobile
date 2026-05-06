@@ -35,16 +35,29 @@ const getAvatarColor = (name) => {
 };
 
 const STAGE_COLORS = {
-  Idea: { bg: 'rgba(245, 166, 35, 0.12)', text: '#F5A623' },
-  MVP: { bg: 'rgba(45, 126, 255, 0.12)', text: '#2D7EFF' },
-  Growth: { bg: 'rgba(39, 174, 96, 0.12)', text: '#27AE60' },
+  Idea: { bg: 'rgba(245, 166, 35, 0.12)', text: '#F5A623', label: 'Ý tưởng' },
+  MVP: { bg: 'rgba(45, 126, 255, 0.12)', text: '#2D7EFF', label: 'MVP' },
+  Growth: { bg: 'rgba(39, 174, 96, 0.12)', text: '#27AE60', label: 'Tăng trưởng' },
 };
 
 const StageBadge = React.memo(({ stage }) => {
-  const colors = STAGE_COLORS[stage] || { bg: 'rgba(255,255,255,0.08)', text: '#999' };
+  const s = String(stage || '').toLowerCase();
+  let colors = { bg: 'rgba(255,255,255,0.08)', text: '#999', label: stage };
+
+  // Mapping logic for IDs or labels
+  if (s === '1' || s.includes('idea') || s.includes('ý tưởng')) {
+    colors = STAGE_COLORS.Idea;
+  } else if (s === '2' || s.includes('mvp')) {
+    colors = STAGE_COLORS.MVP;
+  } else if (s === '3' || s.includes('growth') || s.includes('tăng trưởng')) {
+    colors = STAGE_COLORS.Growth;
+  }
+
   return (
     <View style={{ backgroundColor: colors.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-      <Text allowFontScaling={false} style={{ fontSize: 10, fontWeight: '800', color: colors.text, textTransform: 'uppercase' }}>{stage}</Text>
+      <Text allowFontScaling={false} style={{ fontSize: 10, fontWeight: '800', color: colors.text, textTransform: 'uppercase' }}>
+        {colors.label || stage}
+      </Text>
     </View>
   );
 });
@@ -243,7 +256,7 @@ const StartupCard = React.memo(({
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
               <AIScoreBadge score={scoreValue} colors={colors} />
               <StageBadge stage={startup.stage} />
-              <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.secondaryText, fontWeight: '600' }}>#{startup.industry || 'Khác'}</Text>
+              <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>#{startup.industry || 'Khác'}</Text>
             </View>
           </View>
         </View>

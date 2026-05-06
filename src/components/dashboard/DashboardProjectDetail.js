@@ -333,8 +333,8 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.headerInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text allowFontScaling={false} style={[styles.projectTitle, { color: colors.text }]} numberOfLines={1}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 10 }}>
+              <Text allowFontScaling={false} style={[styles.projectTitle, { color: colors.text, flex: 1 }]} numberOfLines={1}>
                 {fullData.projectName || fullData.name}
               </Text>
               <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
@@ -355,13 +355,21 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
           {(!fullData.projectImageUrl && fullData.status !== 'Rejected') && <View style={{ height: 20 }} />}
           {/* Rejection Notice */}
           {fullData.status === 'Rejected' && fullData.rejectionReason && (
-            <Card style={[styles.rejectionCard, { borderColor: colors.error + '40' }]}>
+            <View style={[styles.rejectionCard, { 
+              backgroundColor: colors.error + '10',
+              borderColor: colors.error + '30',
+            }]}>
               <View style={styles.rejectionHeader}>
-                <AlertCircle size={18} color={colors.error} />
-                <Text style={[styles.rejectionTitle, { color: colors.error }]}>Lý do từ chối:</Text>
+                <View style={[styles.rejectionIconBg, { backgroundColor: colors.error + '20' }]}>
+                  <AlertCircle size={20} color={colors.error} />
+                </View>
+                <Text style={[styles.rejectionTitle, { color: colors.error }]}>Dự án bị từ chối</Text>
               </View>
-              <Text style={[styles.rejectionText, { color: colors.text }]}>{fullData.rejectionReason}</Text>
-            </Card>
+              <View style={[styles.rejectionReasonBox, { backgroundColor: colors.background, borderColor: colors.error + '15' }]}>
+                <Text style={[styles.rejectionLabel, { color: colors.secondaryText }]}>Lý do từ chối:</Text>
+                <Text style={[styles.rejectionText, { color: colors.text }]}>{fullData.rejectionReason}</Text>
+              </View>
+            </View>
           )}
 
           {/* Hero Section if image exists */}
@@ -740,15 +748,53 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerInfo: { flex: 1 },
-  projectTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, maxWidth: '65%' },
+  projectTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
   closeBtn: { padding: 8, borderRadius: 20, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1 },
-  rejectionCard: { margin: 20, padding: 16, marginBottom: 8, borderWidth: 1, backgroundColor: '#fef2f220', borderRadius: 16 },
-  rejectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  rejectionTitle: { fontSize: 15, fontWeight: '800' },
-  rejectionText: { fontSize: 14, lineHeight: 22 },
+  rejectionCard: { 
+    margin: 20, 
+    padding: 16, 
+    marginBottom: 8, 
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  rejectionHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 12, 
+    gap: 12 
+  },
+  rejectionIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  rejectionTitle: { 
+    fontSize: 16, 
+    fontWeight: '900',
+    letterSpacing: -0.3
+  },
+  rejectionReasonBox: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  rejectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4
+  },
+  rejectionText: { 
+    fontSize: 14, 
+    lineHeight: 22,
+    fontWeight: '500'
+  },
   section: { paddingHorizontal: 20, marginBottom: 24 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   iconContainer: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

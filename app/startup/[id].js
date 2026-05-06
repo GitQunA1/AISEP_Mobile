@@ -12,12 +12,16 @@ import startupProfileService from '../../src/services/startupProfileService';
 import AIEvaluationService from '../../src/services/AIEvaluationService';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { Shield, ExternalLink, Activity, CheckCircle, AlertCircle } from 'lucide-react-native';
+import blockchainVerificationService from '../../src/services/blockchainVerificationService';
+import BlockchainVerificationModal from '../../src/components/common/BlockchainVerificationModal';
+import optionService from '../../src/services/optionService';
 import { useSubscription } from '../../src/context/SubscriptionContext';
 import QuotaGuardModal from '../../src/components/common/QuotaGuardModal';
 import AIEvaluationModal from '../../src/components/common/AIEvaluationModal';
-import { 
-  SCORECARD_SECTIONS, 
-  scorecardFromApiToFormState, 
+import {
+  SCORECARD_SECTIONS,
+  scorecardFromApiToFormState,
   getScorecardOptionLabel,
   getScorecardQuickStats,
   TARGET_MARKET_SIZE,
@@ -34,6 +38,7 @@ import {
 import DueDiligenceModal from '../../src/components/startup/DueDiligenceModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const DEFAULT_STAGES = ['Idea', 'MVP', 'Growth'];
 
 export default function StartupDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -59,17 +64,31 @@ export default function StartupDetailScreen() {
   const [aiHistory, setAiHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dynamicStages, setDynamicStages] = useState([]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const stages = await optionService.getStages();
+        setDynamicStages(stages.filter(s => s.isActive !== false));
+      } catch (err) {
+        console.error('Fetch stages error:', err);
+        setDynamicStages(DEFAULT_STAGES.map((s, i) => ({ label: s, value: i + 1 })));
+      }
+    };
+    fetchOptions();
+  }, []);
 
 
   const industryTags = (() => {
     if (!project) return '—';
     const rawInds = project.industries || project.Industries;
     if (Array.isArray(rawInds) && rawInds.length > 0) return rawInds.join(', ');
-    
+
     const singleInd = project.industry || project.Industry || project.industryName || project.projectIndustry || project.category || project.field;
     if (Array.isArray(singleInd)) return singleInd.join(', ');
     if (singleInd) return String(singleInd);
-    
+
     if (project.tags && project.tags.length > 0) return project.tags.join(', ');
     return '—';
   })();
@@ -83,8 +102,50 @@ export default function StartupDetailScreen() {
   const [showAIResultModal, setShowAIResultModal] = useState(false);
   const [showDueDiligenceModal, setShowDueDiligenceModal] = useState(false);
 
-  const mappedScorecard = project?.projectScorecard 
-    ? scorecardFromApiToFormState(project.projectScorecard) 
+  // Blockchain Verification State
+  const [showBlockchainModal, setShowBlockchainModal] = useState(false);
+  const [blockchainData, setBlockchainData] = useState(null);
+  const [isLoadingBlockchain, setIsLoadingBlockchain] = useState(false);
+  const [blockchainError, setBlockchainError] = useState(null);
+
+  const handleBlockchainVerification = async () => {
+    if (isLoadingBlockchain || !id) return;
+
+    // Permissions check
+    const isInvestorApproved = true; // For now assuming approved or checking later
+    const isStartupApproved = true;
+    const isAdvisorApproved = true;
+
+    if (isInvestor && !isInvestorApproved) {
+      alert('Bạn cần được phê duyệt hồ sơ Nhà đầu tư để thực hiện xác thực Blockchain.');
+      return;
+    }
+    if (isStartupUser && !isStartupApproved) {
+      alert('Bạn cần được phê duyệt hồ sơ Startup để thực hiện xác thực Blockchain.');
+      return;
+    }
+    const isAdvisor = roleStr === 'advisor';
+    if (isAdvisor && !isAdvisorApproved) {
+      alert('Bạn cần được phê duyệt hồ sơ Cố vấn để thực hiện xác thực Blockchain.');
+      return;
+    }
+
+    setIsLoadingBlockchain(true);
+    setBlockchainError(null);
+    try {
+      const response = await blockchainVerificationService.verifyProjectBlockchain(id);
+      setBlockchainData(response);
+      setShowBlockchainModal(true);
+    } catch (err) {
+      setBlockchainError(err?.response?.data?.message || err?.message || 'Không thể xác minh dự án trên blockchain');
+      setShowBlockchainModal(true);
+    } finally {
+      setIsLoadingBlockchain(false);
+    }
+  };
+
+  const mappedScorecard = project?.projectScorecard
+    ? scorecardFromApiToFormState(project.projectScorecard)
     : (project?.ProjectScorecard ? scorecardFromApiToFormState(project.ProjectScorecard) : null);
 
   const scQuick = project ? getScorecardQuickStats(project) : null;
@@ -139,8 +200,8 @@ export default function StartupDetailScreen() {
 
         // 3. Check for "already unlocked" or "authorized to see full"
         // We check camelCase, PascalCase, and bypass roles.
-        const unlockedFromApi = projectData.isUnlockedByCurrentUser === true || 
-                                projectData.IsUnlockedByCurrentUser === true;
+        const unlockedFromApi = projectData.isUnlockedByCurrentUser === true ||
+          projectData.IsUnlockedByCurrentUser === true;
 
         const shouldFetchFull = ownerConfirmed || unlockedFromApi || isManualUnlocked || bypassRole;
 
@@ -155,10 +216,16 @@ export default function StartupDetailScreen() {
           }
         }
 
+        const actualStageId = projectData.stageOptionId || projectData.StageOptionId || projectData.developmentStage;
+        const stageLabel = dynamicStages.find(s => String(s.value) === String(actualStageId))?.label 
+          || projectData.stageOption?.label || projectData.StageOption?.Label
+          || projectData.developmentStageName || projectData.stageName
+          || (typeof projectData.developmentStage === 'string' && !/^\d+$/.test(projectData.developmentStage) ? projectData.developmentStage : 'Ý tưởng');
+
         setProject({
           ...projectData,
           name: projectData.projectName || 'Dự án',
-          stage: projectData.developmentStage || 'Ý tưởng',
+          stage: stageLabel,
           status: projectData.status || 'Pending',
           tags: projectData.keySkills ? projectData.keySkills.split(',').map(s => s.trim()).filter(Boolean) : [],
         });
@@ -185,7 +252,7 @@ export default function StartupDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [id, user, isManualUnlocked]);
+  }, [id, user, isManualUnlocked, dynamicStages]);
 
   useEffect(() => {
     loadProjectDetail();
@@ -215,7 +282,7 @@ export default function StartupDetailScreen() {
         });
         setShowUnlockModal(false);
         refreshSubscription(); // Refresh quota after consuming
-        
+
         // Silently reload to ensure all documents and history are updated with full access
         loadProjectDetail();
       } else {
@@ -309,7 +376,7 @@ export default function StartupDetailScreen() {
   );
 
   const PremiumBadge = ({ onPress }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress || (() => setShowUnlockModal(true))}
       style={{
@@ -439,7 +506,7 @@ export default function StartupDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ backgroundColor: colors.background }} edges={['top']} />
-      
+
       {/* HEADER */}
       <View style={{
         flexDirection: 'row',
@@ -453,11 +520,11 @@ export default function StartupDetailScreen() {
       }}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, marginRight: 12 }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
-          <View>
+          <View style={{ flex: 1, marginRight: 8 }}>
             <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }} numberOfLines={1}>
               {project?.name}
             </Text>
@@ -465,19 +532,48 @@ export default function StartupDetailScreen() {
           </View>
         </TouchableOpacity>
 
-        {project?.status === 'approved' && (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 5,
-            backgroundColor: 'rgba(39,174,96,0.15)',
-            borderWidth: 1, borderColor: '#27AE60',
-            paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-          }}>
-            <Ionicons name="checkmark-circle" size={14} color="#27AE60" />
-            <Text style={{ fontSize: 13, color: '#27AE60', fontWeight: '800' }}>
-              Đã duyệt
-            </Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {user && (
+            <TouchableOpacity
+              onPress={handleBlockchainVerification}
+              disabled={isLoadingBlockchain}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: colors.primary + '10',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: colors.primary + '30',
+              }}
+            >
+              {isLoadingBlockchain ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <>
+                  <Shield size={12} color={colors.primary} />
+                  <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '800' }}>Xác thực</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {project?.status === 'approved' && (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 5,
+              backgroundColor: 'rgba(39,174,96,0.15)',
+              borderWidth: 1, borderColor: '#27AE60',
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+            }}>
+              <Ionicons name="checkmark-circle" size={14} color="#27AE60" />
+              <Text style={{ fontSize: 13, color: '#27AE60', fontWeight: '800' }}>
+                Đã duyệt
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <ScrollView
@@ -487,8 +583,8 @@ export default function StartupDetailScreen() {
       >
         {/* HERO SECTION */}
         <LinearGradient
-          colors={isDark 
-            ? [colors.primary + '30', colors.background] 
+          colors={isDark
+            ? [colors.primary + '30', colors.background]
             : [colors.primary + '10', colors.background]
           }
           style={{ paddingHorizontal: 20, paddingTop: 32, paddingBottom: 40 }}
@@ -519,7 +615,7 @@ export default function StartupDetailScreen() {
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 26, fontWeight: '900', color: colors.text, marginBottom: 4 }}>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: colors.text, marginBottom: 4 }} numberOfLines={2}>
                 {project.name}
               </Text>
               <Text style={{ fontSize: 14, color: colors.secondaryText, fontWeight: '500' }}>
@@ -563,16 +659,16 @@ export default function StartupDetailScreen() {
                 android: { elevation: 2 }
               })
             }}>
-              <View style={{ 
-                width: 38, height: 38, borderRadius: 12, 
-                backgroundColor: stat.color + '15', 
+              <View style={{
+                width: 38, height: 38, borderRadius: 12,
+                backgroundColor: stat.color + '15',
                 justifyContent: 'center', alignItems: 'center',
                 marginRight: 14
               }}>
                 {stat.icon}
               </View>
               <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Text 
+                <Text
                   style={{ fontSize: 10, fontWeight: '800', color: colors.secondaryText, letterSpacing: 1, marginBottom: 2 }}
                   numberOfLines={2}
                 >
@@ -580,8 +676,8 @@ export default function StartupDetailScreen() {
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {isOwner || isAlreadyUnlocked || !stat.isPremium ? (
-                    <Text 
-                      style={{ fontSize: 15, fontWeight: '900', color: stat.color, flexShrink: 1 }} 
+                    <Text
+                      style={{ fontSize: 15, fontWeight: '900', color: stat.color, flexShrink: 1 }}
                       numberOfLines={1}
                     >
                       {stat.value}
@@ -593,92 +689,6 @@ export default function StartupDetailScreen() {
               </View>
             </View>
           ))}
-        </View>
-
-        {/* THÔNG TIN CƠ BẢN */}
-        <SectionCard
-          icon={<Ionicons name="clipboard-outline" size={16} color={colors.primary} />}
-          title="THÔNG TIN CƠ BẢN"
-          accentColor={colors.primary}
-        >
-          <DetailRow label="MÔ TẢ NGẮN" value={project.shortDescription || project.description} />
-          
-          <FieldLabel>GIAI ĐOẠN PHÁT TRIỂN</FieldLabel>
-          <StageBadge stage={project.stage} />
-          <View style={{ marginBottom: 16 }} />
-
-          <DetailRow label="LĨNH VỰC" value={industryTags} />
-          <DetailRow label="VẤN ĐỀ CẦN GIẢI QUYẾT" value={project.problemStatement} />
-          <DetailRow label="GIẢI PHÁP ĐỀ XUẤT" value={project.solutionDescription || project.proposedSolution} />
-        </SectionCard>
-
-        {/* HÌNH ẢNH DỰ ÁN */}
-        <SectionCard
-          icon={<Ionicons name="image-outline" size={16} color={colors.primary} />}
-          title="HÌNH ẢNH DỰ ÁN"
-          accentColor={colors.primary}
-        >
-          {project.projectImageUrl ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
-                // Potential fullscreen view logic
-              }}
-              style={{ borderRadius: 12, overflow: 'hidden', height: 180, width: '100%', backgroundColor: colors.mutedBackground }}
-            >
-              <Image
-                source={{ uri: project.projectImageUrl }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBackground, borderRadius: 12 }}>
-              <Ionicons name="image-outline" size={32} color={colors.border} />
-              <Text style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8 }}>Không có hình ảnh mô tả</Text>
-            </View>
-          )}
-        </SectionCard>
-
-
-
-        {/* LỊCH SỬ ĐÁNH GIÁ AI */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: colors.mutedBackground || (isDark ? '#111827' : '#F8FAFC'),
-          borderRadius: 12,
-          padding: 16,
-          marginHorizontal: 16,
-          marginBottom: 16,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Ionicons name="flash-outline" size={22} color="#F5A623" />
-            <View>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
-                Lịch sử đánh giá AI
-              </Text>
-              <Text style={{ fontSize: 13, color: colors.secondaryText, marginTop: 2 }}>
-                {aiHistory?.length > 0
-                  ? `Lần cuối: ${formatDate(aiHistory[0].evaluatedAt || aiHistory[0].createdAt)}`
-                  : 'Chưa có bản đánh giá nào'}
-              </Text>
-            </View>
-          </View>
-          {aiHistory?.length > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                setAiResult(aiHistory[0]);
-                setShowAIResultModal(true);
-              }}
-              style={{ backgroundColor: colors.primary + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-            >
-              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Chi tiết</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* CỐ VẤN CHÍNH THỨC */}
@@ -739,6 +749,57 @@ export default function StartupDetailScreen() {
           )}
         </SectionCard>
 
+        {/* THÔNG TIN CƠ BẢN */}
+        <SectionCard
+          icon={<Ionicons name="clipboard-outline" size={16} color={colors.primary} />}
+          title="THÔNG TIN CƠ BẢN"
+          accentColor={colors.primary}
+        >
+          <DetailRow label="MÔ TẢ NGẮN" value={project.shortDescription || project.description} />
+
+          <FieldLabel>GIAI ĐOẠN PHÁT TRIỂN</FieldLabel>
+          <StageBadge stage={project.stage} />
+          <View style={{ marginBottom: 16 }} />
+
+          <DetailRow label="LĨNH VỰC" value={industryTags} />
+          <DetailRow label="VẤN ĐỀ CẦN GIẢI QUYẾT" value={project.problemStatement} />
+          <DetailRow label="GIẢI PHÁP ĐỀ XUẤT" value={project.solutionDescription || project.proposedSolution} />
+        </SectionCard>
+
+        {/* HÌNH ẢNH DỰ ÁN */}
+        <SectionCard
+          icon={<Ionicons name="image-outline" size={16} color={colors.primary} />}
+          title="HÌNH ẢNH DỰ ÁN"
+          accentColor={colors.primary}
+        >
+          {project.projectImageUrl ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                // Potential fullscreen view logic
+              }}
+              style={{ borderRadius: 12, overflow: 'hidden', height: 180, width: '100%', backgroundColor: colors.mutedBackground }}
+            >
+              <Image
+                source={{ uri: project.projectImageUrl }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBackground, borderRadius: 12 }}>
+              <Ionicons name="image-outline" size={32} color={colors.border} />
+              <Text style={{ color: colors.secondaryText, fontSize: 13, marginTop: 8 }}>Không có hình ảnh mô tả</Text>
+            </View>
+          )}
+        </SectionCard>
+
+
+
+
+
+
+
         {/* THỊ TRƯỜNG & MÔ HÌNH */}
         <SectionCard
           icon={<Ionicons name="trending-up-outline" size={16} color="#27AE60" />}
@@ -748,7 +809,7 @@ export default function StartupDetailScreen() {
           <DetailRow label="KHÁCH HÀNG MỤC TIÊU" value={project.targetCustomers} isPremium />
           <DetailRow label="UVP" value={project.uniqueValueProposition || project.uvp} isPremium />
           <DetailRow label="MÔ HÌNH KINH DOANH" value={project.businessModel} isPremium />
-          
+
           {mappedScorecard && (
             <>
               <DetailRow label="QUY MÔ THỊ TRƯỜNG" value={getScorecardOptionLabel(TARGET_MARKET_SIZE, mappedScorecard.targetMarketSize)} isPremium />
@@ -818,24 +879,7 @@ export default function StartupDetailScreen() {
           </SectionCard>
         )}
 
-        {/* DUE DILIGENCE GENERATION (NEW) */}
-        {(isOwner || isInvestor || bypassRole) && (
-          <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-            <TouchableOpacity
-              onPress={() => setShowDueDiligenceModal(true)}
-              style={{
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                backgroundColor: '#1e293b',
-                paddingVertical: 13, borderRadius: 14,
-              }}
-            >
-              <FileText size={18} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                Xuất Báo Cáo Due Diligence
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
 
         {/* TÀI LIỆU DỰ ÁN */}
         <SectionCard
@@ -917,6 +961,19 @@ export default function StartupDetailScreen() {
         project={project}
         user={user}
       />
+      <BlockchainVerificationModal
+        isOpen={showBlockchainModal}
+        verificationData={blockchainData}
+        isLoading={isLoadingBlockchain}
+        error={blockchainError}
+        projectName={project?.name}
+        onClose={() => {
+          setShowBlockchainModal(false);
+          setBlockchainData(null);
+          setBlockchainError(null);
+        }}
+      />
+
     </View>
   );
 }

@@ -111,7 +111,7 @@ export default function AIEvaluationModal({
             <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
           </View>
           <View style={styles.scoreMeta}>
-            <Text style={[styles.projectName, { color: colors.text }]}>{projectName}</Text>
+            <Text style={[styles.projectName, { color: colors.text }]} numberOfLines={1}>{projectName}</Text>
             <Text style={{ fontSize: 13, color: colors.secondaryText, fontWeight: '600' }}>Phân tích bởi AISEP AI</Text>
           </View>
         </View>

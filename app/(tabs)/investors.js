@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, Text, StyleSheet, FlatList, TextInput, 
-  TouchableOpacity, RefreshControl, Animated, 
-  Platform 
+import {
+  View, Text, StyleSheet, FlatList, TextInput,
+  TouchableOpacity, RefreshControl, Animated,
+  Platform
 } from 'react-native';
-import { Search, Filter, TrendingUp, X } from 'lucide-react-native';
+import { Search, TrendingUp, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useScrollToTop, useFocusEffect } from '@react-navigation/native';
@@ -15,7 +15,6 @@ import { useTheme } from '../../src/context/ThemeContext';
 
 import InvestorCard from '../../src/components/investor/InvestorCard';
 import InvestorSkeletonCard from '../../src/components/investor/InvestorSkeletonCard';
-import InvestorFilterModal from '../../src/components/investor/InvestorFilterModal';
 import TabScreenWrapper from '../../src/components/navigation/TabScreenWrapper';
 
 export default function InvestorsScreen() {
@@ -39,19 +38,7 @@ export default function InvestorsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Custom Filters State Map
-  const [filters, setFilters] = useState({
-    industry: 'Tất cả ngành nghề',
-    stage: 'Tất cả giai đoạn',
-    fundingStatus: 'Tất cả trạng thái',
-    minAiScore: 0
-  });
 
-  // Modal map
-  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
-  
-  // Search Bar Animation
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchBorderAnim = useRef(new Animated.Value(0)).current;
 
@@ -59,8 +46,8 @@ export default function InvestorsScreen() {
     try {
       // Use matching API for startups to show relevant investors, otherwise use general list
       const isStartup = user?.role === 0 || user?.role === 'Startup';
-      const response = isStartup 
-        ? await investorService.getMatchingInvestors() 
+      const response = isStartup
+        ? await investorService.getMatchingInvestors()
         : await investorService.getAllInvestors();
 
       if (response && response.items) {
@@ -69,7 +56,7 @@ export default function InvestorsScreen() {
           name: inv.organizationName || inv.userName,
           userName: inv.userName,
           thesis: inv.investmentTaste || 'Chưa cập nhật khẩu vị đầu tư.',
-          type: 'Nhà đầu tư', 
+          type: 'Nhà đầu tư',
           industries: Array.isArray(inv.industries) ? inv.industries : (inv.industries ? inv.industries.split(',').map(s => s.trim()) : []),
           stages: inv.preferredStage ? [inv.preferredStage] : (inv.preferredStageOptionId ? [`Giai đoạn ${inv.preferredStageOptionId}`] : ['Chưa xác định']),
           location: inv.investmentRegion || 'Chưa cập nhật',
@@ -96,30 +83,13 @@ export default function InvestorsScreen() {
     fetchInvestors();
   };
 
-  const handleApplyFilters = (newFilters) => {
-    setFilters(newFilters);
-  };
-
   // Filter logic combining text and tags
   const filteredInvestors = investors.filter(inv => {
-    // text search
-    const matchesSearch = 
+    const matchesSearch =
       (inv.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (inv.thesis || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    // industry filter
-    const matchesIndustry = 
-      filters.industry === 'Tất cả ngành nghề' ||
-      inv.industries.includes(filters.industry);
-    
-    // stage filter
-    const matchesStage = 
-      filters.stage === 'Tất cả giai đoạn' ||
-      inv.stages.includes(filters.stage);
-    
-    // Notice: fundingStatus mock checks omitted due to UI parity limits
-
-    return matchesSearch && matchesIndustry && matchesStage;
+    return matchesSearch;
   });
 
   // Search Border Animation Hook
@@ -141,17 +111,6 @@ export default function InvestorsScreen() {
     router.push(`/investor/${investor.id}`);
   };
 
-  // Count active filter flags for the indicator
-  const getActiveFiltersCount = () => {
-    let count = 0;
-    if (filters.industry !== 'Tất cả ngành nghề') count++;
-    if (filters.stage !== 'Tất cả giai đoạn') count++;
-    if (filters.fundingStatus !== 'Tất cả trạng thái') count++;
-    return count;
-  };
-
-  const selectedCount = getActiveFiltersCount();
-
   return (
     <TabScreenWrapper>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -168,10 +127,10 @@ export default function InvestorsScreen() {
         {/* SEARCH AND FILTER SECTION */}
         <View style={styles.searchSection}>
           <Animated.View style={[
-            styles.searchContainer, 
-            { 
-              backgroundColor: colors.inputBackground, 
-              borderColor: borderColor 
+            styles.searchContainer,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: borderColor
             }
           ]}>
             <Search size={16} color={colors.secondaryText} style={{ marginRight: 8 }} />
@@ -191,18 +150,6 @@ export default function InvestorsScreen() {
               </TouchableOpacity>
             )}
           </Animated.View>
-
-          <TouchableOpacity 
-            style={[styles.filterBtn, { backgroundColor: colors.primary }]}
-            onPress={() => setIsFilterModalVisible(true)}
-          >
-            <Filter size={18} color="#fff" />
-            {selectedCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: colors.error }]}>
-                <Text style={styles.badgeText}>{selectedCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
 
         {/* FEED SECTION */}
@@ -212,8 +159,8 @@ export default function InvestorsScreen() {
           renderItem={({ item }) => isLoading ? (
             <InvestorSkeletonCard />
           ) : (
-            <InvestorCard 
-              investor={item} 
+            <InvestorCard
+              investor={item}
               user={user}
               onViewProfile={(id) => router.push(`/investor/${id}`)}
               onConnect={() => handleConnect(item)}
@@ -227,10 +174,10 @@ export default function InvestorsScreen() {
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={
-            <RefreshControl 
-                refreshing={isRefreshing} 
-                onRefresh={onRefresh} 
-                tintColor={colors.primary}
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
             />
           }
           ListEmptyComponent={
@@ -243,22 +190,13 @@ export default function InvestorsScreen() {
             )
           }
         />
-
-        {/* BOTTOM SHEET MODAL */}
-        <InvestorFilterModal 
-          isVisible={isFilterModalVisible}
-          filters={filters}
-          onApply={handleApplyFilters}
-          onClose={() => setIsFilterModalVisible(false)}
-        />
-        
       </View>
     </TabScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
     paddingTop: 10,
   },
@@ -286,71 +224,45 @@ const styles = StyleSheet.create({
     marginTop: 0,
     lineHeight: 18,
   },
-  searchSection: { 
+  searchSection: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     marginBottom: 12,
   },
-  searchContainer: { 
+  searchContainer: {
     flex: 1,
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderRadius: 24, 
-    paddingHorizontal: 16, 
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 11 : 4,
     borderWidth: 1.5,
   },
-  searchInput: { 
-    flex: 1, 
+  searchInput: {
+    flex: 1,
     fontSize: 14,
   },
-  filterBtn: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 12, 
-    marginLeft: 12,
-    alignItems: 'center', 
-    justifyContent: 'center',
-    position: 'relative'
-  },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  list: { 
+  list: {
     paddingBottom: 100,
     paddingTop: 8,
   },
   separator: {
     height: 12,
   },
-  emptyState: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 80,
     paddingHorizontal: 40,
   },
-  emptyTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     marginTop: 16,
   },
-  emptySubtitle: { 
-    fontSize: 14, 
+  emptySubtitle: {
+    fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
   },

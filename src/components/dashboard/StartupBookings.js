@@ -163,7 +163,7 @@ export default function StartupBookings({ user, onAction, refreshKey }) {
     const endTime = new Date(item.endTime);
     const isChatLoading = chatLoadingId === (item.id || item.bookingId);
     
-    const isFree = item.isFreeRebookFromComplaint || item.IsFreeRebookFromComplaint || item.usedPremiumFreeQuota || item.UsedPremiumFreeQuota;
+    const isFree = item.isPaymentWaived || item.IsPaymentWaived || item.usedPremiumFreeQuota || item.UsedPremiumFreeQuota;
 
     return (
       <FadeInView>

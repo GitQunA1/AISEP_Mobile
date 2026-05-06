@@ -25,6 +25,7 @@ import connectionService from '../../services/connectionService';
 import dealsService from '../../services/dealsService';
 import signalRService from '../../services/signalRService';
 import chatService from '../../services/chatService';
+import optionService from '../../services/optionService';
 
 // Child Components
 import StartupProfileForm from './StartupProfileForm';
@@ -76,6 +77,20 @@ export default function StartupDashboard({ initialTab }) {
     aiScore: 0,
     completion: 0
   });
+  const [dynamicStages, setDynamicStages] = useState([]);
+
+  const fetchStages = async () => {
+    try {
+      const stages = await optionService.getStages();
+      setDynamicStages(stages.filter(s => s.isActive !== false));
+    } catch (err) {
+      console.error('Fetch stages error:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStages();
+  }, []);
 
   // UI States
   const [showProjectWizard, setShowProjectWizard] = useState(false);
@@ -525,6 +540,7 @@ export default function StartupDashboard({ initialTab }) {
               project={project}
               colors={colors}
               isDark={activeTheme.isDark}
+              dynamicStages={dynamicStages}
               onPress={() => {
                 Haptics.selectionAsync();
                 setSelectedProject(project);
@@ -900,7 +916,7 @@ function StatCard({ icon, value, label, colors, color, isDark }) {
   );
 }
 
-function ProjectListItem({ project, colors, isDark, onPress }) {
+function ProjectListItem({ project, colors, isDark, onPress, dynamicStages = [] }) {
   const statusColors = {
     Approved: { bg: colors.statusApprovedBg, text: colors.statusApprovedText, label: 'Đã duyệt' },
     Published: { bg: colors.statusApprovedBg, text: colors.statusApprovedText, label: 'Đã đăng' },
@@ -909,6 +925,13 @@ function ProjectListItem({ project, colors, isDark, onPress }) {
     Rejected: { bg: colors.statusRejectedBg, text: colors.statusRejectedText, label: 'Từ chối' },
   };
   const status = statusColors[project.status] || statusColors.Draft;
+
+  // Robust Stage Resolution
+  const actualStageId = project.stageOptionId || project.StageOptionId || project.developmentStage;
+  const stageLabel = dynamicStages.find(s => String(s.value) === String(actualStageId))?.label 
+    || project.stageOption?.label || project.StageOption?.Label
+    || project.developmentStageName || project.stageName
+    || (typeof project.developmentStage === 'string' && !/^\d+$/.test(project.developmentStage) ? project.developmentStage : 'Ý tưởng');
 
   return (
     <Card 
@@ -936,7 +959,7 @@ function ProjectListItem({ project, colors, isDark, onPress }) {
         <View style={styles.metaLabel}>
           <Target size={14} color={colors.accentCyan} />
           <Text style={[styles.projectMetaText, { color: colors.secondaryText }]}>
-            {project.stage || 'Ý tưởng'}
+            {stageLabel}
           </Text>
         </View>
         <ChevronRight size={18} color={colors.border} />

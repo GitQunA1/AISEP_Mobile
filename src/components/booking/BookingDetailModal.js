@@ -123,10 +123,11 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
   
   const timeRange = `${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} – ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
 
-  const isFreeRebook = booking.isFreeRebookFromComplaint || booking.IsFreeRebookFromComplaint;
+  const isPaymentWaived = booking.isPaymentWaived || booking.IsPaymentWaived;
   const isPremiumFree = booking.usedPremiumFreeQuota || booking.UsedPremiumFreeQuota;
-  const isFree = isFreeRebook || isPremiumFree;
+  const isFree = isPaymentWaived || isPremiumFree;
 
+  const isBonusFree = isPaymentWaived && !isPremiumFree;
   const showAsFreeToUser = isFree && ['Startup', 'Investor'].includes(userRole);
   const price = showAsFreeToUser ? 0 : (booking.price || booking.estimatedPrice || 0);
   const formatPrice = (p) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p);
@@ -137,14 +138,14 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
     const isAdvisor = userRole === 'Advisor';
     const isStaff = userRole === 'Staff';
     
-    if (status === 8 || status === 'ConsultingReportOverdue') {
+    if (status === 8 || status === 'ConsultingReportOverdue' || status === 3) {
       return (
         <View style={[styles.banner, { backgroundColor: '#fef2f2', borderColor: '#fee2e2' }]}>
           <AlertCircle size={20} color="#ef4444" />
           <View style={styles.bannerContent}>
             <Text style={styles.bannerTitle}>Advisor đã quá hạn nộp báo cáo (24h)</Text>
             <Text style={styles.bannerDesc}>
-              {isCustomer && "Hệ thống ghi nhận Advisor chưa nộp báo cáo kết quả đúng hạn."}
+              {isCustomer && "Hệ thống ghi nhận Advisor chưa nộp báo cáo kết quả đúng hạn. Bạn sẽ được hệ thống hoàn lại 1 lượt booking miễn phí để đền bù."}
               {isAdvisor && "Bạn đã bỏ lỡ thời hạn nộp báo cáo (24h sau khi kết thúc). Vui lòng nộp ngay."}
               {isStaff && "Advisor này đã quá hạn nộp báo cáo. Hệ thống đã đánh dấu overdue."}
             </Text>
@@ -153,7 +154,7 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
       );
     }
 
-    if (status === 9 || status === 'ComplaintPending') {
+    if (status === 9 || status === 'ComplaintPending' || status === 4) {
       return (
         <View style={[styles.banner, { backgroundColor: '#eff6ff', borderColor: '#dbeafe' }]}>
           <Info size={20} color="#3b82f6" />
@@ -169,16 +170,33 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
       );
     }
 
-    if (status === 4 || status === 'ComplaintAccepted') {
+    if (status === 4 || status === 'ComplaintAccepted' || status === 6) {
       return (
         <View style={[styles.banner, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}>
           <ShieldCheck size={20} color="#22c55e" />
           <View style={styles.bannerContent}>
             <Text style={styles.bannerTitle}>Khiếu nại đã được chấp thuận</Text>
             <Text style={styles.bannerDesc}>
-              {isCustomer && "Staff đã xác nhận khiếu nại hợp lệ. Bạn đã được hoàn trả 1 lượt booking."}
+              {isCustomer && "Staff đã xác nhận khiếu nại hợp lệ. Bạn đã được hoàn trả 1 lượt booking miễn phí vào tài khoản."}
               {isAdvisor && "Khiếu nại từ khách hàng đã được xác nhận. Lượt booking đã được hoàn trả."}
               {isStaff && "Khiếu nại đã được giải quyết thành công (Valid)."}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (isFree && isCustomer && [6, 7, 'Cancel', 'NoResponse'].includes(status)) {
+      return (
+        <View style={[styles.banner, { backgroundColor: '#eff6ff', borderColor: '#dbeafe' }]}>
+          <Info size={20} color="#3b82f6" />
+          <View style={styles.bannerContent}>
+            <Text style={styles.bannerTitle}>Lượt đặt tư vấn miễn phí sẽ được hoàn trả</Text>
+            <Text style={styles.bannerDesc}>
+              {status === 6 || status === 'Cancel' 
+                ? "Advisor đã từ chối yêu cầu này. Lượt đặt tư vấn miễn phí của bạn sẽ được hệ thống hoàn trả lại."
+                : "Hệ thống ghi nhận Advisor không phản hồi đúng hạn. Lượt đặt tư vấn miễn phí của bạn sẽ được hoàn trả lại."
+              }
             </Text>
           </View>
         </View>
@@ -290,16 +308,16 @@ export default function BookingDetailModal({ isVisible, onClose, booking, onActi
                 </View>
               </View>
 
-              {isFreeRebook && (
+              {isBonusFree && (
                 <View style={styles.freeDetailRow}>
                   <ShieldCheck size={16} color="#10b981" />
-                  <Text style={[styles.freeDetailText, { color: colors.secondaryText }]}>Đặt lịch lại miễn phí (Từ khiếu nại trước đó)</Text>
+                  <Text style={[styles.freeDetailText, { color: colors.secondaryText }]}>Lượt đặt lại miễn phí (Từ hoàn trả/thưởng)</Text>
                 </View>
               )}
               {isPremiumFree && (
                 <View style={styles.freeDetailRow}>
-                  <Gavel size={16} color="#eab308" />
-                  <Text style={[styles.freeDetailText, { color: colors.secondaryText }]}>Booking miễn phí (Từ gói đăng ký Premium)</Text>
+                  <Sparkles size={16} color="#eab308" fill="#eab308" />
+                  <Text style={[styles.freeDetailText, { color: colors.secondaryText }]}>Booking miễn phí (Từ gói Premium)</Text>
                 </View>
               )}
             </View>

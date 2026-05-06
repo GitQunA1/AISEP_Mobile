@@ -137,7 +137,7 @@ export default function AdvisorBookings({
     const isConfirmed = item.status === 2 || item.status === 'Confirmed' || item.status === 9 || item.status === 'ComplaintPending';
     const isActioning = actionLoading[item.id];
     
-    const isFree = item.isFreeRebookFromComplaint || item.IsFreeRebookFromComplaint || item.usedPremiumFreeQuota || item.UsedPremiumFreeQuota;
+    const isFree = item.isPaymentWaived || item.IsPaymentWaived || item.usedPremiumFreeQuota || item.UsedPremiumFreeQuota;
 
     return (
       <FadeInView delay={index * 50}>

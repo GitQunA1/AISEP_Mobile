@@ -37,8 +37,8 @@ const HEADER_HEIGHT = 110; // BASE HEIGHT without SafeArea inset
 
 const SORT_OPTIONS = [
   { key: 'newest', label: 'Mới nhất', icon: Clock, sieve: '-CreatedAt' },
+  { key: 'suggested', label: 'Đánh giá cao', icon: Star, sieve: '-StartupPotentialScore' },
   { key: 'oldest', label: 'Cũ nhất', icon: List, sieve: 'CreatedAt' },
-  { key: 'recommended', label: 'Được đề xuất', icon: Star, sieve: '-ProjectId' },
 ];
 
 // These will be fallback/initial values if dynamic fetch fails
@@ -92,18 +92,21 @@ export default function DiscoveryScreen() {
   const [dynamicStages, setDynamicStages] = useState([]);
   const [dynamicIndustries, setDynamicIndustries] = useState([]);
 
-  const fetchProjects = async (params) => {
+  const fetchProjects = async (params, overrideStages = null, overrideIndustries = null) => {
     try {
+      const stagesToUse = overrideStages || dynamicStages;
+      const industriesToUse = overrideIndustries || dynamicIndustries;
+
       const sortOption = SORT_OPTIONS.find(o => o.key === params.sort);
       let sorts = sortOption?.sieve || '-CreatedAt';
       let filters = 'Status==Approved';
 
       if (params.stage && params.stage.length > 0) {
-        const stageFilters = params.stage.map(s => `DevelopmentStage==${s}`).join('||');
+        const stageFilters = params.stage.map(s => `StageOptionId==${s}`).join('||');
         filters += (filters ? ',' : '') + `(${stageFilters})`;
       }
       if (params.industry && params.industry.length > 0) {
-        const industryFilters = params.industry.map(i => `Industry==${i}`).join('||');
+        const industryFilters = params.industry.map(i => `IndustryOptionId==${i}`).join('||');
         filters += (filters ? ',' : '') + `(${industryFilters})`;
       }
 
@@ -139,6 +142,18 @@ export default function DiscoveryScreen() {
         const sid = p.startupId || p.userId;
         const info = startupMap[sid];
 
+        // Robust ID extraction for both camelCase and PascalCase (Backend inconsistency guard)
+        const actualStageId = p.stageOptionId || p.StageOptionId || p.developmentStage || p.developmentStageOption?.id || p.stageOption?.id;
+        const actualIndustryId = p.industryOptionId || p.IndustryOptionId || p.industryId || p.industryOption?.id;
+
+        // Map stage ID to label using stagesToUse
+        const stageLabel = stagesToUse.find(s => String(s.value) === String(actualStageId))?.label
+          || p.stageOption?.label || p.StageOption?.Label || p.developmentStageName || p.stageName || 'Ý tưởng';
+
+        // Map industry label to ID using industriesToUse for strict filtering
+        const industryLabel = (Array.isArray(p.industries) && p.industries.length > 0) ? p.industries[0] : 'Khác';
+        const finalIndustryId = actualIndustryId || dynamicIndustries.find(i => i.label === industryLabel)?.value;
+
         return {
           ...p,
           id: p.projectId,
@@ -146,8 +161,10 @@ export default function DiscoveryScreen() {
           logo: info?.logo || p.startupLogoUrl || p.logoUrl,
           name: p.projectName,
           description: p.shortDescription || 'Chưa có mô tả.',
-          stage: p.developmentStage ?? 'Idea',
-          industry: p.industry ?? 'Khác',
+          stage: stageLabel,
+          industry: industryLabel,
+          stageOptionId: actualStageId,
+          industryOptionId: finalIndustryId,
           aiScore: p.startupPotentialScore ?? null,
           imageUrl: p.projectImageUrl,
           interestedCount: p.followerCount || 0,
@@ -158,8 +175,27 @@ export default function DiscoveryScreen() {
         };
       });
 
+      // Strict frontend filtering to ensure UI matches user expectations
+      const filteredItems = mappedItems.filter(p => {
+        // 1. Mandatory Status Filter (Discovery only shows Approved projects)
+        const status = String(p.status || '').toLowerCase();
+        if (status !== 'approved' && status !== 'published') return false;
+
+        // 2. Dynamic Stage Filter
+        // Check both the mapped ID and raw potential ID fields for maximum resilience
+        const pStageId = String(p.stageOptionId || p.StageOptionId || p.developmentStage || '');
+        const matchesStage = params.stage.length === 0 ||
+          params.stage.some(id => String(id) === pStageId);
+
+        // 3. Dynamic Industry Filter
+        const matchesIndustry = params.industry.length === 0 ||
+          params.industry.some(id => String(id) === String(p.industryOptionId));
+
+        return matchesStage && matchesIndustry;
+      });
+
       return {
-        data: mappedItems,
+        data: filteredItems,
         total: data.totalCount ?? (items.length === PAGE_SIZE ? (params.page * PAGE_SIZE) + 1 : items.length),
         hasMore: items.length === PAGE_SIZE,
       };
@@ -169,7 +205,7 @@ export default function DiscoveryScreen() {
     }
   };
 
-  const fetchInitial = useCallback(async (sortKey, filters = activeFilters, isRefresh = false) => {
+  const fetchInitial = useCallback(async (sortKey, filters = activeFilters, isRefresh = false, overrideStages = null, overrideIndustries = null) => {
     if (!isRefresh) {
       setIsLoading(true);
       setProjects([]); // CLEAR CURRENT DATA IMMEDIATELY FOR LOADING FEEDBACK
@@ -182,7 +218,7 @@ export default function DiscoveryScreen() {
         sort: sortKey,
         stage: filters.stage,
         industry: filters.industry,
-      });
+      }, overrideStages, overrideIndustries);
 
       // SMOOTH TRANSITION FROM LOADING TO CONTENT
       if (Platform.OS === 'android') {
@@ -239,17 +275,29 @@ export default function DiscoveryScreen() {
 
   useEffect(() => {
     const initData = async () => {
-      fetchInitial(activeSort);
       try {
         const [stages, industries] = await Promise.all([
           optionService.getStages(),
           optionService.getIndustries()
         ]);
-        if (stages.length > 0) setDynamicStages(stages.map(s => s.label));
-        if (industries.length > 0) setDynamicIndustries(industries.map(i => i.label));
+        const activeStages = stages.filter(s => s.isActive !== false);
+        const activeIndustries = industries.filter(i => i.isActive !== false);
+
+        setDynamicStages(activeStages);
+        setDynamicIndustries(activeIndustries);
+
+        // Fetch projects AFTER options are loaded to ensure labels map correctly
+        fetchInitial(activeSort, {
+          stage: activeFilters.stage,
+          industry: activeFilters.industry
+        }, false, activeStages, activeIndustries);
       } catch (err) {
-        setDynamicStages(DEFAULT_STAGES);
-        setDynamicIndustries(DEFAULT_INDUSTRIES);
+        console.error('initData error:', err);
+        const fallbackStages = DEFAULT_STAGES.map((s, i) => ({ label: s, value: i + 1 }));
+        const fallbackIndustries = DEFAULT_INDUSTRIES.map((ind, i) => ({ label: ind, value: i + 1 }));
+        setDynamicStages(fallbackStages);
+        setDynamicIndustries(fallbackIndustries);
+        fetchInitial(activeSort, activeFilters, false, fallbackStages, fallbackIndustries);
       }
     };
     initData();
@@ -367,10 +415,10 @@ export default function DiscoveryScreen() {
                     }}>
                       {option.label}
                     </Text>
-                    {isActive && totalCount > 0 && (
+                    {isActive && projects.length > 0 && (
                       <View style={{ backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
                         <Text allowFontScaling={false} style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
-                          {totalCount}
+                          {projects.length}
                         </Text>
                       </View>
                     )}
@@ -543,16 +591,16 @@ export default function DiscoveryScreen() {
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.6 }}>
                 <Text allowFontScaling={false} style={styles.filterGroupLabel(colors)}>Giai đoạn</Text>
                 <View style={styles.chipContainer}>
-                  {(dynamicStages.length > 0 ? dynamicStages : DEFAULT_STAGES).map((stage) => {
-                    const isActive = activeFilters.stage.includes(stage);
+                  {dynamicStages.map((stage) => {
+                    const isActive = activeFilters.stage.includes(stage.value);
                     return (
                       <TouchableOpacity
-                        key={stage}
-                        onPress={() => toggleFilter('stage', stage)}
+                        key={stage.value}
+                        onPress={() => toggleFilter('stage', stage.value)}
                         style={[styles.chip(colors), isActive && styles.chipActive(colors)]}
                       >
                         {isActive && <Check size={14} color="#fff" style={{ marginRight: 6 }} />}
-                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{stage}</Text>
+                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{stage.label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -560,16 +608,16 @@ export default function DiscoveryScreen() {
 
                 <Text allowFontScaling={false} style={styles.filterGroupLabel(colors)}>Ngành</Text>
                 <View style={styles.chipContainer}>
-                  {(dynamicIndustries.length > 0 ? dynamicIndustries : DEFAULT_INDUSTRIES).map((ind) => {
-                    const isActive = activeFilters.industry.includes(ind);
+                  {dynamicIndustries.map((ind) => {
+                    const isActive = activeFilters.industry.includes(ind.value);
                     return (
                       <TouchableOpacity
-                        key={ind}
-                        onPress={() => toggleFilter('industry', ind)}
+                        key={ind.value}
+                        onPress={() => toggleFilter('industry', ind.value)}
                         style={[styles.chip(colors), isActive && styles.chipActive(colors)]}
                       >
                         {isActive && <Check size={14} color="#fff" style={{ marginRight: 6 }} />}
-                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{ind}</Text>
+                        <Text allowFontScaling={false} style={[styles.chipText(colors), isActive && styles.chipTextActive(colors)]}>{ind.label}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -623,7 +671,7 @@ const styles = {
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.88)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,

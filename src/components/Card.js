@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Pressable, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const Card = ({ children, style, variant = 'default', onPress }) => {
@@ -31,6 +31,9 @@ const Card = ({ children, style, variant = 'default', onPress }) => {
     }
   });
 
+  const flattenedStyle = StyleSheet.flatten(style) || {};
+  const borderRadius = flattenedStyle.borderRadius || radius.lg;
+
   const content = (
     <View style={[
       cardStyles.card, 
@@ -43,9 +46,25 @@ const Card = ({ children, style, variant = 'default', onPress }) => {
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        {content}
-      </TouchableOpacity>
+      <View style={[
+        { borderRadius, overflow: 'hidden' }, 
+        flattenedStyle.margin && { margin: flattenedStyle.margin }, 
+        flattenedStyle.marginBottom && { marginBottom: flattenedStyle.marginBottom }, 
+        flattenedStyle.marginTop && { marginTop: flattenedStyle.marginTop }, 
+        flattenedStyle.marginVertical && { marginVertical: flattenedStyle.marginVertical }, 
+        flattenedStyle.marginHorizontal && { marginHorizontal: flattenedStyle.marginHorizontal }
+      ]}>
+        <Pressable
+          onPress={onPress}
+          android_ripple={{ color: colors.border + '40', borderless: false }}
+          style={({ pressed }) => [
+            { width: '100%', opacity: Platform.OS === 'ios' && pressed ? 0.7 : 1 },
+            Platform.OS === 'ios' && pressed && { transform: [{ scale: 0.99 }] }
+          ]}
+        >
+          {content}
+        </Pressable>
+      </View>
     );
   }
 
