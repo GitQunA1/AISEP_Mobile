@@ -256,6 +256,8 @@ const StartupCard = React.memo(({
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 8 }}>
               <AIScoreBadge score={scoreValue} colors={colors} />
               <StageBadge stage={startup.stage} />
+            </View>
+            <View style={{ marginTop: 6 }}>
               <Text allowFontScaling={false} style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>#{startup.industry || 'Khác'}</Text>
             </View>
           </View>

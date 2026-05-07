@@ -222,12 +222,12 @@ export default function SubscriptionManagementScreen() {
           <View style={styles.statusRow}>
             {(subscription && (subscription.status === 1 || subscription.status === 'Active')) ? (
               <>
-                <CheckCircle2 size={16} color="#10b981" />
+                <CheckCircle2 size={16} color="#10b981" style={{ marginTop: 2 }} />
                 <Text style={[styles.statusText, { color: '#10b981' }]}>Gói đang hoạt động</Text>
               </>
             ) : (
               <>
-                <AlertCircle size={16} color={colors.secondaryText} />
+                <AlertCircle size={16} color={colors.secondaryText} style={{ marginTop: 2 }} />
                 <Text style={[styles.statusText, { color: colors.secondaryText }]}>Hãy nâng cấp để có thêm quyền lợi</Text>
               </>
             )}
@@ -368,8 +368,8 @@ export default function SubscriptionManagementScreen() {
               {paymentPhase === 'success' && (
                 <View style={styles.statusSection}>
                   <CheckCircle2 size={80} color="#10b981" style={{ marginBottom: 20 }} />
-                  <Text style={[styles.statusTitle, { color: colors.text }]}>Kích hoạt thành công!</Text>
-                  <Text style={[styles.statusText, { color: colors.secondaryText }]}>
+                  <Text style={[styles.modalStatusTitle, { color: colors.text }]}>Kích hoạt thành công!</Text>
+                  <Text style={[styles.modalStatusText, { color: colors.secondaryText }]}>
                     Gói {selectedPackageName} của bạn đã được kích hoạt. Bạn có thể sử dụng các tính năng Premium ngay bây giờ.
                   </Text>
                   <Button title="Hoàn tất" onPress={handleModalClose} style={{ width: '100%', marginTop: 30 }} />
@@ -379,8 +379,8 @@ export default function SubscriptionManagementScreen() {
               {paymentPhase === 'failed' && (
                 <View style={styles.statusSection}>
                   <AlertCircle size={80} color={colors.error} style={{ marginBottom: 20 }} />
-                  <Text style={[styles.statusTitle, { color: colors.text }]}>Giao dịch thất bại</Text>
-                  <Text style={[styles.statusText, { color: colors.secondaryText }]}>
+                  <Text style={[styles.modalStatusTitle, { color: colors.text }]}>Giao dịch thất bại</Text>
+                  <Text style={[styles.modalStatusText, { color: colors.secondaryText }]}>
                     Đã có lỗi xảy ra trong quá trình xử lý. Tiền của bạn sẽ được hoàn trả nếu giao dịch đã bị trừ.
                   </Text>
                   <Button title="Quay lại" onPress={handleModalClose} style={{ width: '100%', marginTop: 30 }} />
@@ -425,8 +425,8 @@ const styles = StyleSheet.create({
   planTitle: { fontSize: 20, fontWeight: '800', marginBottom: 12 },
   planDetails: { marginBottom: 20 },
   detailText: { fontSize: 14, lineHeight: 22, marginBottom: 4 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusText: { fontSize: 13, fontWeight: '600' },
+  statusRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  statusText: { fontSize: 13, fontWeight: '600', flex: 1, textAlign: 'left' },
 
   sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 6 },
   sectionSubtitle: { fontSize: 14, marginBottom: 20 },
@@ -437,13 +437,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
-  usageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  usageLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  usageTexts: { gap: 2 },
-  usageTitle: { fontSize: 15, fontWeight: '700' },
-  usageSubtitle: { fontSize: 12 },
-  usageValueBox: { alignItems: 'flex-end' },
+  usageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 10 },
+  usageLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  usageTexts: { gap: 2, flex: 1 },
+  usageTitle: { fontSize: 14, fontWeight: '700' },
+  usageSubtitle: { fontSize: 11 },
+  usageValueBox: { alignItems: 'flex-end', flexShrink: 0, minWidth: 80 },
   usageValue: { fontSize: 16, fontWeight: '800' },
   lockedText: { fontSize: 11, fontWeight: '800' },
   progressBar: { height: 6, borderRadius: 3, overflow: 'hidden' },
@@ -502,6 +502,6 @@ const styles = StyleSheet.create({
   instruction: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
 
   statusSection: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  statusTitle: { fontSize: 24, fontWeight: '800', marginBottom: 12 },
-  statusText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  modalStatusTitle: { fontSize: 24, fontWeight: '800', marginBottom: 12, textAlign: 'center' },
+  modalStatusText: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
 });

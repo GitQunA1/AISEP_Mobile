@@ -13,9 +13,9 @@ export default function AIAnalysisRadarChart({ auditedItems, labelMapper = (c) =
   const { activeTheme } = useTheme();
   const colors = activeTheme.colors;
 
-  const size = SCREEN_WIDTH - 80;
+  const size = SCREEN_WIDTH;
   const center = size / 2;
-  const radius = center * 0.7;
+  const radius = center * 0.4; // Small radius for large label room
 
   const data = useMemo(() => {
     if (!Array.isArray(auditedItems) || auditedItems.length === 0) return [];
@@ -51,7 +51,7 @@ export default function AIAnalysisRadarChart({ auditedItems, labelMapper = (c) =
   const auditedPolygon = auditedPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
-    <View style={{ alignItems: 'center', marginVertical: 20 }}>
+    <View style={{ alignItems: 'center', marginVertical: 20, marginLeft: -20, width: SCREEN_WIDTH }}>
       <Svg height={size} width={size}>
         {/* Grids */}
         {[20, 40, 60, 80, 100].map((tick) => (
@@ -72,8 +72,16 @@ export default function AIAnalysisRadarChart({ auditedItems, labelMapper = (c) =
         {data.map((d, i) => {
           const angle = i * angleStep;
           const p = getPoint(100, angle);
-          const labelP = getPoint(115, angle);
           
+          // Improved label positioning
+          const labelOffset = 120;
+          const labelP = getPoint(labelOffset, angle);
+          
+          // Determine text anchor based on angle
+          let textAnchor = 'middle';
+          if (angle > 0.1 && angle < Math.PI - 0.1) textAnchor = 'start';
+          else if (angle > Math.PI + 0.1 && angle < Math.PI * 2 - 0.1) textAnchor = 'end';
+
           return (
             <G key={`axis-${i}`}>
               <Line
@@ -88,9 +96,9 @@ export default function AIAnalysisRadarChart({ auditedItems, labelMapper = (c) =
                 x={labelP.x}
                 y={labelP.y}
                 fill={colors.secondaryText}
-                fontSize="10"
+                fontSize="9"
                 fontWeight="bold"
-                textAnchor="middle"
+                textAnchor={textAnchor}
                 alignmentBaseline="middle"
               >
                 {d.label}

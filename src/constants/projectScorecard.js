@@ -4,59 +4,59 @@
  */
 
 export const TEAM_SIZE = [
-  { value: 'Solo', label: 'Solo Founder', helper: 'Chỉ có 1 người sáng lập, gánh vác mọi vai trò trong dự án.' },
-  { value: 'TwoFounders', label: 'Cặp Co-founders', helper: '2 người sáng lập, thường bù trừ kỹ năng cho nhau (ví dụ: 1 Kỹ thuật & 1 Kinh doanh).' },
-  { value: 'ThreeOrMore', label: 'Đội ngũ hoàn thiện', helper: 'Từ 3 co-founders trở lên, cấu trúc phòng ban và phân chia công việc rõ ràng.' },
+  { value: 1, label: 'Solo Founder', helper: 'Chỉ có 1 người sáng lập, gánh vác mọi vai trò trong dự án.' },
+  { value: 2, label: 'Cặp Co-founders', helper: '2 người sáng lập, thường bù trừ kỹ năng cho nhau (ví dụ: 1 Kỹ thuật & 1 Kinh doanh).' },
+  { value: 3, label: 'Đội ngũ hoàn thiện', helper: 'Từ 3 co-founders trở lên, cấu trúc phòng ban và phân chia công việc rõ ràng.' },
 ];
 
 export const TEAM_EXPERIENCE = [
-  { value: 'FirstTime', label: 'Lần đầu khởi nghiệp', helper: 'Đội ngũ trẻ, nhiệt huyết nhưng chưa có kinh nghiệm quản lý hoặc gọi vốn trước đây.' },
-  { value: 'IndustryExpert', label: 'Chuyên gia trong ngành', helper: 'Founder có nhiều năm kinh nghiệm làm việc chuyên sâu trong lĩnh vực đang khởi nghiệp.' },
-  { value: 'SerialFounder', label: 'Đã từng khởi nghiệp', helper: 'Đã từng sáng lập/đồng sáng lập và thoái vốn (exit) hoặc vận hành thành công startup trước đó.' },
+  { value: 1, label: 'Lần đầu khởi nghiệp', helper: 'Đội ngũ trẻ, nhiệt huyết nhưng chưa có kinh nghiệm quản lý hoặc gọi vốn trước đây.' },
+  { value: 2, label: 'Chuyên gia trong ngành', helper: 'Founder có nhiều năm kinh nghiệm làm việc chuyên sâu trong lĩnh vực đang khởi nghiệp.' },
+  { value: 3, label: 'Đã từng khởi nghiệp', helper: 'Đã từng sáng lập/đồng sáng lập và thoái vốn (exit) hoặc vận hành thành công startup trước đó.' },
 ];
 
 export const TARGET_MARKET_SIZE = [
-  { value: 'Niche', label: 'Thị trường ngách', helper: 'Quy mô dưới 250 tỷ VNĐ, tập trung vào tệp khách hàng rất đặc thù.' },
-  { value: 'Medium', label: 'Thị trường tầm trung', helper: 'Quy mô từ 250 tỷ - 2.500 tỷ VNĐ, không gian tăng trưởng tốt tại thị trường nội địa hoặc khu vực.' },
-  { value: 'Large', label: 'Thị trường lớn', helper: 'Quy mô trên 2.500 tỷ VNĐ, tiềm năng mở rộng (Scale) ra toàn cầu hoặc thống trị khu vực.' },
+  { value: 1, label: 'Thị trường ngách', helper: 'Quy mô dưới 250 tỷ VNĐ, tập trung vào tệp khách hàng rất đặc thù.' },
+  { value: 2, label: 'Thị trường tầm trung', helper: 'Quy mô từ 250 tỷ - 2.500 tỷ VNĐ, không gian tăng trưởng tốt tại thị trường nội địa hoặc khu vực.' },
+  { value: 3, label: 'Thị trường lớn', helper: 'Quy mô trên 2.500 tỷ VNĐ, tiềm năng mở rộng (Scale) ra toàn cầu hoặc thống trị khu vực.' },
 ];
 
 export const MARKET_GROWTH = [
-  { value: 'Slow', label: 'Chậm', helper: 'Ngành truyền thống, tốc độ số hóa chậm hoặc đã bão hòa (Tăng trưởng dưới 5%/năm).' },
-  { value: 'Steady', label: 'Ổn định', helper: 'Tăng trưởng đều đặn cùng nhịp với nền kinh tế (Tăng trưởng từ 5% - 15%/năm).' },
-  { value: 'Fast', label: 'Nóng / Đột phá', helper: 'Đang là xu hướng mạnh, tăng trưởng rất nhanh (ví dụ: AI, Proptech, Fintech) (Tăng trưởng > 15%/năm).' },
+  { value: 1, label: 'Chậm', helper: 'Ngành truyền thống, tốc độ số hóa chậm hoặc đã bão hòa (Tăng trưởng dưới 5%/năm).' },
+  { value: 2, label: 'Ổn định', helper: 'Tăng trưởng đều đặn cùng nhịp với nền kinh tế (Tăng trưởng từ 5% - 15%/năm).' },
+  { value: 3, label: 'Fast', label: 'Nóng / Đột phá', helper: 'Đang là xu hướng mạnh, tăng trưởng rất nhanh (ví dụ: AI, Proptech, Fintech) (Tăng trưởng > 15%/năm).' },
 ];
 
 export const PRODUCT_READINESS = [
-  { value: 'Idea', label: 'Ý tưởng', helper: 'Mới nằm trên giấy, đang khảo sát thị trường, chưa có sản phẩm thực tế.' },
-  { value: 'Prototype', label: 'Bản mẫu (Prototype)', helper: 'Đã có bản phác thảo hoặc thiết kế tính năng cơ bản, dùng để demo.' },
-  { value: 'MVP', label: 'Sản phẩm tối thiểu (MVP)', helper: 'Đã sản xuất xong tính năng cốt lõi, có thể đưa cho người dùng đầu tiên trải nghiệm.' },
-  { value: 'MarketReady', label: 'Sẵn sàng ra thị trường', helper: 'Sản phẩm hoàn thiện, ít lỗi, đã đóng gói sẵn sàng để bán đại trà.' },
+  { value: 1, label: 'Ý tưởng', helper: 'Mới nằm trên giấy, đang khảo sát thị trường, chưa có sản phẩm thực tế.' },
+  { value: 2, label: 'Bản mẫu (Prototype)', helper: 'Đã có bản phác thảo hoặc thiết kế tính năng cơ bản, dùng để demo.' },
+  { value: 3, label: 'Sản phẩm tối thiểu (MVP)', helper: 'Đã sản xuất xong tính năng cốt lõi, có thể đưa cho người dùng đầu tiên trải nghiệm.' },
+  { value: 4, label: 'Sẵn sàng ra thị trường', helper: 'Sản phẩm hoàn thiện, ít lỗi, đã đóng gói sẵn sàng để bán đại trà.' },
 ];
 
 export const IP_PROTECTION = [
-  { value: 'None', label: 'Không có bảo vệ', helper: 'Công nghệ dễ bị copy, sử dụng mã nguồn mở hoặc mô hình kinh doanh thuần túy.' },
-  { value: 'Defensible', label: 'Có rào cản mềm', helper: 'Đang nộp đơn sở hữu trí tuệ, hoặc sở hữu dữ liệu/thuật toán nội bộ khó sao chép ngay.' },
-  { value: 'Secured', label: 'Đã được bảo hộ', helper: 'Sở hữu bằng sáng chế độc quyền, công nghệ lõi được pháp luật bảo vệ.' },
+  { value: 1, label: 'Không có bảo vệ', helper: 'Công nghệ dễ bị copy, sử dụng mã nguồn mở hoặc mô hình kinh doanh thuần túy.' },
+  { value: 2, label: 'Có rào cản mềm', helper: 'Đang nộp đơn sở hữu trí tuệ, hoặc sở hữu dữ liệu/thuật toán nội bộ khó sao chép ngay.' },
+  { value: 3, label: 'Đã được bảo hộ', helper: 'Sở hữu bằng sáng chế độc quyền, công nghệ lõi được pháp luật bảo vệ.' },
 ];
 
 export const BARRIER_TO_ENTRY = [
-  { value: 'Low', label: 'Thấp', helper: 'Chi phí bắt đầu rẻ, công nghệ đơn giản, đối thủ dễ dàng sao chép và nhảy vào thị phần.' },
-  { value: 'Medium', label: 'Trung bình', helper: 'Đòi hỏi một lượng vốn nhất định hoặc mạng lưới quan hệ (network) tốt để bắt đầu.' },
-  { value: 'High', label: 'Cao', helper: 'Cần vốn đầu tư ban đầu khổng lồ, hoặc đòi hỏi giấy phép pháp lý khắt khe (VD: Y tế, Tài chính).' },
+  { value: 1, label: 'Thấp', helper: 'Chi phí bắt đầu rẻ, công nghệ đơn giản, đối thủ dễ dàng sao chép và nhảy vào thị phần.' },
+  { value: 2, label: 'Trung bình', helper: 'Đòi hỏi một lượng vốn nhất định hoặc mạng lưới quan hệ (network) tốt để bắt đầu.' },
+  { value: 3, label: 'Cao', helper: 'Cần vốn đầu tư ban đầu khổng lồ, hoặc đòi hỏi giấy phép pháp lý khắt khe (VD: Y tế, Tài chính).' },
 ];
 
 export const CURRENT_TRACTION = [
-  { value: 'PreRevenue', label: 'Chưa có doanh thu', helper: 'Đang trong giai đoạn phát triển, chưa phát sinh dòng tiền.' },
-  { value: 'UserAcquisition', label: 'Có người dùng thử', helper: 'Chưa có lợi nhuận nhưng đã có lượng người dùng thường xuyên hoặc đăng ký chờ lớn.' },
-  { value: 'RevenueGenerating', label: 'Đã có doanh thu', helper: 'Đã bắt đầu có khách hàng trả tiền, mô hình kinh doanh được chứng minh tính khả thi.' },
-  { value: 'ScalingOrProfitable', label: 'Tăng trưởng mạnh/Có lãi', helper: 'Dòng tiền dương hoặc doanh thu đang có tốc độ tăng trưởng tính bằng lần (MoM/YoY).' },
+  { value: 1, label: 'Chưa có doanh thu', helper: 'Đang trong giai đoạn phát triển, chưa phát sinh dòng tiền.' },
+  { value: 2, label: 'Có người dùng thử', helper: 'Chưa có lợi nhuận nhưng đã có lượng người dùng thường xuyên hoặc đăng ký chờ lớn.' },
+  { value: 3, label: 'Đã có doanh thu', helper: 'Đã bắt đầu có khách hàng trả tiền, mô hình kinh doanh được chứng minh tính khả thi.' },
+  { value: 4, label: 'Tăng trưởng mạnh/Có lãi', helper: 'Dòng tiền dương hoặc doanh thu đang có tốc độ tăng trưởng tính bằng lần (MoM/YoY).' },
 ];
 
 export const RUNWAY_MONTHS = [
-  { value: 'Under6Months', label: 'Dưới 6 tháng', helper: 'Nguy cơ cạn vốn cao, cần tiền gấp để duy trì hoạt động.' },
-  { value: 'SixToTwelveMonths', label: 'Từ 6 đến 12 tháng', helper: 'Mức độ an toàn trung bình, có đủ thời gian để tối ưu sản phẩm trong lúc gọi vốn.' },
-  { value: 'Over12Months', label: 'Trên 12 tháng', helper: 'Dòng tiền khỏe, gọi vốn chủ yếu để mở rộng thị phần (Scale) chứ không phải để sinh tồn.' },
+  { value: 1, label: 'Dưới 6 tháng', helper: 'Nguy cơ cạn vốn cao, cần tiền gấp để duy trì hoạt động.' },
+  { value: 2, label: 'Từ 6 đến 12 tháng', helper: 'Mức độ an toàn trung bình, có đủ thời gian để tối ưu sản phẩm trong lúc gọi vốn.' },
+  { value: 3, label: 'Trên 12 tháng', helper: 'Dòng tiền khỏe, gọi vốn chủ yếu để mở rộng thị phần (Scale) chứ không phải để sinh tồn.' },
 ];
 
 /** Thứ tự field + options list (dùng form & hiển thị) */
@@ -152,16 +152,16 @@ export function scorecardFromApiToFormState(sc) {
     return false;
   };
   return {
-    teamSize: String(g('teamSize', 'TeamSize') || ''),
-    teamExperience: String(g('teamExperience', 'TeamExperience') || ''),
+    teamSize: Number(g('teamSize', 'TeamSize') || 0),
+    teamExperience: Number(g('teamExperience', 'TeamExperience') || 0),
     hasTechnicalCofounder: gb('hasTechnicalCofounder', 'HasTechnicalCofounder'),
-    targetMarketSize: String(g('targetMarketSize', 'TargetMarketSize') || ''),
-    marketGrowth: String(g('marketGrowth', 'MarketGrowth') || ''),
-    productReadiness: String(g('productReadiness', 'ProductReadiness') || ''),
-    ipProtection: String(g('ipProtection', 'IpProtection') || ''),
-    barrierToEntry: String(g('barrierToEntry', 'BarrierToEntry') || ''),
-    currentTraction: String(g('currentTraction', 'CurrentTraction') || ''),
-    runwayMonths: String(g('runwayMonths', 'RunwayMonths') || ''),
+    targetMarketSize: Number(g('targetMarketSize', 'TargetMarketSize') || 0),
+    marketGrowth: Number(g('marketGrowth', 'MarketGrowth') || 0),
+    productReadiness: Number(g('productReadiness', 'ProductReadiness') || 0),
+    ipProtection: Number(g('ipProtection', 'IpProtection') || 0),
+    barrierToEntry: Number(g('barrierToEntry', 'BarrierToEntry') || 0),
+    currentTraction: Number(g('currentTraction', 'CurrentTraction') || 0),
+    runwayMonths: Number(g('runwayMonths', 'RunwayMonths') || 0),
   };
 }
 

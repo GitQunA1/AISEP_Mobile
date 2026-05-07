@@ -43,7 +43,8 @@ const startupProfileService = {
    */
   getAllStartups: async (queryParams = {}) => {
     try {
-      return await apiClient.get('/api/Startups', { params: queryParams });
+      const params = { pageSize: 100, ...queryParams };
+      return await apiClient.get('/api/Startups', { params });
     } catch (error) {
       console.error('Error fetching all startups:', error);
       throw error;

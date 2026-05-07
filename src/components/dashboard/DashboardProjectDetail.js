@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, Dimensions,
   Animated, Image, Platform
 } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import {
   X, AlertCircle, FileText, TrendingUp, Users, Shield,
@@ -150,6 +151,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   useEffect(() => {
     if (visible) {
       fetchEnums();
+      refreshSubscription();
     }
   }, [visible]);
 
@@ -246,6 +248,11 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
   };
 
   const handleAIEvaluation = async () => {
+    // If not premium, try refreshing once to see if they just upgraded
+    if (!isPremium) {
+      await refreshSubscription();
+    }
+
     if (!isPremium) {
       Alert.alert(
         'Tính năng Premium',
@@ -424,7 +431,7 @@ export default function DashboardProjectDetail({ visible, project, onClose, onRe
                         numberOfLines={1}
                         adjustsFontSizeToFit
                       >
-                        {aiAnalysis.potentialScore || aiAnalysis.score}
+                        {aiAnalysis.potentialScore ?? aiAnalysis.score ?? '0'}
                       </Text>
                       <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
                     </View>

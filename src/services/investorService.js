@@ -12,7 +12,8 @@ const investorService = {
    */
   getAllInvestors: async (queryParams = {}) => {
     try {
-      const response = await apiClient.get('/api/Investor', { params: queryParams });
+      const params = { pageSize: 100, ...queryParams };
+      const response = await apiClient.get('/api/Investor', { params });
       return response?.data ?? response;
     } catch (error) {
        if (error?.statusCode === 404 || error?.response?.status === 404) {

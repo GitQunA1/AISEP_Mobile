@@ -49,7 +49,7 @@ const dealsService = {
    */
   getInvestorDeals: async () => {
     try {
-      const response = await apiClient.get('/api/Deals');
+      const response = await apiClient.get('/api/Deals', { params: { pageSize: 100 } });
       return response;
     } catch (error) {
       console.error('[dealsService] getInvestorDeals Error:', error);
@@ -201,7 +201,7 @@ const dealsService = {
    */
   getStartupDeals: async () => {
     try {
-      const response = await apiClient.get('/api/Deals');
+      const response = await apiClient.get('/api/Deals', { params: { pageSize: 100 } });
       return response;
     } catch (error) {
       console.error('[dealsService] getStartupDeals Error:', error);

@@ -106,7 +106,7 @@ export function SubscriptionProvider({ children }) {
 
   // Refresh subscription data silently in background
   const refreshSubscription = useCallback(() => {
-    fetchSubscriptionData(true);
+    return fetchSubscriptionData(true);
   }, [fetchSubscriptionData]);
 
   useEffect(() => {

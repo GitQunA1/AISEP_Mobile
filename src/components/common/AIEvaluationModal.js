@@ -33,15 +33,18 @@ export default function AIEvaluationModal({
 
   // Extract analysis data (Normalized format)
   const analysis = data?.analysis || {};
-  const scoreBreakdown = data?.scoreBreakdown || [];
-  const potentialScore = data?.potentialScore || data?.startupPotentialScore || 0;
+  const auditedItems = analysis.auditedItems || data?.auditedItems || [];
   
-  // Extract key points from nested analysis if available
+  // Overall scores
+  const totalBaseScore = analysis.totalBaseScore || data?.baseScore || 0;
+  const adjustmentScore = analysis.totalAIAdjustmentScore || data?.aiAdjustmentScore || 0;
+  const finalScore = analysis.totalFinalScore || data?.finalPotentialScore || data?.potentialScore || 0;
+  
+  // Extract key points from nested analysis
   const strengths = analysis.strengths || data?.strengths || [];
   const weaknesses = analysis.weaknesses || data?.weaknesses || [];
   const summary = analysis.summary || data?.summary || '';
-  const recommendations = analysis.recommendations || data?.recommendations || [];
-  const auditedItems = analysis.auditedItems || [];
+  const recommendations = analysis.advice || analysis.recommendations || data?.recommendations || [];
 
   const toggleSection = (key) => {
     setExpandedSections(prev => ({
@@ -56,8 +59,8 @@ export default function AIEvaluationModal({
       market: 'Thị trường',
       product: 'Sản phẩm',
       competition: 'Cạnh tranh',
-      traction: 'Tiến triển',
-      investmentneed: 'Nhu cầu đầu tư',
+      traction: 'Tình trạng kinh doanh',
+      investmentneed: 'Nhu cầu đầu tư & Runway',
       opportunity: 'Cơ hội thị trường',
       financials: 'Tài chính',
       strategy: 'Chiến lược',
@@ -98,54 +101,38 @@ export default function AIEvaluationModal({
 
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Overall Score */}
-        <View style={styles.scoreContainer}>
-          <View style={[styles.scoreCircle, { borderColor: colors.primary }]}>
-            <Text 
-              style={[styles.scoreValue, { color: colors.text }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {potentialScore}
-            </Text>
-            <Text style={[styles.scoreMax, { color: colors.secondaryText }]}>/100</Text>
+        {/* Overall Score Summary (Vertical List for better readability) */}
+        <View style={styles.verticalSummaryContainer}>
+          <View style={[styles.verticalSummaryItem, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: colors.border }]}>
+            <View style={[styles.verticalSummaryIcon, { backgroundColor: colors.border + '20' }]}>
+              <BarChart3 size={18} color={colors.secondaryText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verticalSummaryLabel, { color: colors.secondaryText }]}>ĐIỂM FORM TỰ ĐÁNH GIÁ</Text>
+              <Text style={[styles.verticalSummaryValue, { color: colors.text }]}>{totalBaseScore.toFixed(2)}</Text>
+            </View>
           </View>
-          <View style={styles.scoreMeta}>
-            <Text style={[styles.projectName, { color: colors.text }]} numberOfLines={1}>{projectName}</Text>
-            <Text style={{ fontSize: 13, color: colors.secondaryText, fontWeight: '600' }}>Phân tích bởi AISEP AI</Text>
+          
+          <View style={[styles.verticalSummaryItem, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: '#f59e0b40' }]}>
+            <View style={[styles.verticalSummaryIcon, { backgroundColor: '#f59e0b15' }]}>
+              <TrendingUp size={18} color="#f59e0b" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verticalSummaryLabel, { color: '#f59e0b' }]}>AI HIỆU CHỈNH</Text>
+              <Text style={[styles.verticalSummaryValue, { color: '#f59e0b' }]}>{adjustmentScore > 0 ? `+${adjustmentScore.toFixed(2)}` : adjustmentScore.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.verticalSummaryItem, { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderColor: '#10b98140' }]}>
+            <View style={[styles.verticalSummaryIcon, { backgroundColor: '#10b98115' }]}>
+              <CheckCircle size={18} color="#10b981" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verticalSummaryLabel, { color: '#10b981' }]}>ĐIỂM AI PHÊ DUYỆT</Text>
+              <Text style={[styles.verticalSummaryValue, { color: '#10b981' }]}>{finalScore.toFixed(2)}</Text>
+            </View>
           </View>
         </View>
-
-        {/* Score Breakdown Bars */}
-        {scoreBreakdown.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <BarChart3 size={18} color={colors.primary} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Cấu trúc điểm số</Text>
-            </View>
-            <Card style={styles.breakdownCard}>
-              {scoreBreakdown.map((item, idx) => (
-                <View key={idx} style={styles.breakdownItem}>
-                  <View style={styles.breakdownInfo}>
-                    <Text style={[styles.componentName, { color: colors.secondaryText }]}>{item.component}</Text>
-                    <Text style={[styles.componentScore, { color: colors.primary }]}>{item.score?.toFixed(1)}</Text>
-                  </View>
-                  <View style={[styles.progressBar, { backgroundColor: colors.mutedBackground }]}>
-                    <View 
-                      style={[
-                        styles.progressFill, 
-                        { 
-                          backgroundColor: colors.primary, 
-                          width: `${((item.score || 0) / 1.5) * 100}%` 
-                        }
-                      ]} 
-                    />
-                  </View>
-                </View>
-              ))}
-            </Card>
-          </View>
-        )}
 
         {/* Radar Chart (Matrix Graph) */}
         {auditedItems.length > 0 && (
@@ -177,35 +164,44 @@ export default function AIEvaluationModal({
                     style={[styles.analysisItem, { borderColor: colors.border, backgroundColor: colors.card }]}
                   >
                     <View style={styles.analysisHeader}>
-                      <View style={styles.analysisTitleRow}>
-                        {isExpanded ? <ChevronDown size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.secondaryText} />}
-                        <Text style={[styles.analysisTitle, { color: colors.text }]}>{translateKey(item.criteria || item.title || 'Hạng mục')}</Text>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.analysisTitleRow}>
+                          {isExpanded ? <ChevronDown size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.secondaryText} />}
+                          <Text style={[styles.analysisTitle, { color: colors.text }]}>{translateKey(item.criteria || item.title || 'Hạng mục')}</Text>
+                        </View>
+                        <View style={[styles.categoryScoreBadge, { backgroundColor: colors.primary + '10', marginTop: 8 }]}>
+                           <Text style={[styles.categoryScoreText, { color: colors.primary }]}>
+                             Cuối: {(() => {
+                               const val = item.finalScore ?? item.FinalScore ?? item.score;
+                               return (val !== undefined && val !== null) ? Number(val).toFixed(2) : '—';
+                             })()} / Max {item.maxScore || item.MaxScore || '?'}
+                           </Text>
+                        </View>
                       </View>
-                      <Text style={[styles.analysisScore, { color: colors.primary }]}>{item.score?.toFixed(1) || '—'}</Text>
                     </View>
                     
                     {isExpanded && (
                       <View style={styles.analysisDetails}>
-                        {item.reason && (
-                          <View style={styles.detailBlock}>
-                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Lý do:</Text>
-                            <Text style={[styles.detailValue, { color: colors.text }]}>{item.reason}</Text>
+                        <View style={styles.scoreDetailRow}>
+                          <Text style={[styles.scoreDetailText, { color: colors.text }]}>
+                            <Text style={{ color: colors.secondaryText, fontWeight: '600' }}>Gốc: </Text>
+                            <Text style={{ fontWeight: '800' }}>{item.baseScore?.toFixed(2) || item.BaseScore?.toFixed(2) || '0'}</Text>
+                            <Text style={{ color: colors.border }}>  •  </Text>
+                            <Text style={{ color: '#f59e0b', fontWeight: '600' }}>Điều chỉnh: </Text>
+                            <Text style={{ color: '#f59e0b', fontWeight: '800' }}>{item.adjustment > 0 ? `+${item.adjustment.toFixed(2)}` : (item.adjustment?.toFixed(2) || item.Adjustment?.toFixed(2) || '0')}</Text>
+                          </Text>
+                        </View>
+
+                        {item.finding && (
+                          <View style={[styles.findingBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#fcfcfc', borderColor: colors.border + '50' }]}>
+                             <Text style={[styles.detailValue, { color: colors.text, fontSize: 13, lineHeight: 22 }]}>{item.finding}</Text>
                           </View>
                         )}
-                        {Array.isArray(item.evidence) && item.evidence.length > 0 && (
+                        
+                        {(item.reason || item.reasoning) && (
                           <View style={styles.detailBlock}>
-                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Bằng chứng:</Text>
-                            {item.evidence.map((e, i) => (
-                              <Text key={i} style={[styles.detailValue, { color: colors.text }]}>• {e}</Text>
-                            ))}
-                          </View>
-                        )}
-                        {Array.isArray(item.missingData) && item.missingData.length > 0 && (
-                          <View style={styles.detailBlock}>
-                            <Text style={[styles.detailLabel, { color: '#ef4444' }]}>Dữ liệu thiếu:</Text>
-                            {item.missingData.map((m, i) => (
-                              <Text key={i} style={[styles.detailValue, { color: colors.secondaryText }]}>⚠ {m}</Text>
-                            ))}
+                            <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>Giải thích AI:</Text>
+                            <Text style={[styles.detailValue, { color: colors.text }]}>{item.reason || item.reasoning}</Text>
                           </View>
                         )}
                       </View>
@@ -396,16 +392,44 @@ const styles = StyleSheet.create({
   scoreMax: { fontSize: 12, fontWeight: '700', marginTop: -2 },
   scoreMeta: { flex: 1 },
   projectName: { fontSize: 18, fontWeight: '800', marginBottom: 6 },
-  riskBadge: { 
+  
+  summaryContainer: { 
+    gap: 12, 
+    marginBottom: 25 
+  },
+  verticalSummaryContainer: { gap: 10, marginBottom: 25 },
+  verticalSummaryItem: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 6, 
-    backgroundColor: '#f59e0b15', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 6 
+    padding: 14, 
+    borderRadius: 16, 
+    borderWidth: 1, 
+    gap: 12 
   },
-  riskText: { fontSize: 12, color: '#f59e0b', fontWeight: '700' },
+  verticalSummaryIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  verticalSummaryLabel: { fontSize: 10, fontWeight: '800', marginBottom: 2 },
+  verticalSummaryValue: { fontSize: 18, fontWeight: '900' },
+
+  summaryBox: { 
+    flex: 1, 
+    padding: 8, 
+    borderRadius: 16, 
+    borderWidth: 1, 
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 70
+  },
+  summaryLabel: { 
+    fontSize: 8, 
+    fontWeight: '800', 
+    textAlign: 'center', 
+    marginBottom: 4,
+    lineHeight: 11
+  },
+  summaryValue: { 
+    fontSize: 16, 
+    fontWeight: '900' 
+  },
 
   section: { marginBottom: 25 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
@@ -423,12 +447,27 @@ const styles = StyleSheet.create({
   summaryText: { fontSize: 14, lineHeight: 22, fontStyle: 'italic' },
 
   analysisItem: { borderRadius: 16, borderWidth: 1, padding: 15, marginBottom: 10 },
-  analysisHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  analysisTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  analysisTitle: { fontSize: 14, fontWeight: '700' },
-  analysisScore: { fontSize: 14, fontWeight: '800' },
-  analysisDetails: { marginTop: 12, paddingLeft: 26, gap: 12 },
-  detailBlock: { gap: 4 },
+  analysisHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  analysisTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  analysisTitle: { fontSize: 15, fontWeight: '700' },
+  categoryScoreBadge: { 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 8, 
+    alignSelf: 'flex-start'
+  },
+  categoryScoreText: { fontSize: 11, fontWeight: '800' },
+  analysisDetails: { marginTop: 12, paddingLeft: 0, gap: 12 },
+  scoreDetailRow: { marginBottom: 4, paddingHorizontal: 12 },
+  scoreDetailText: { fontSize: 13 },
+  findingBox: { 
+    padding: 16, 
+    borderRadius: 14, 
+    borderWidth: 1, 
+    borderStyle: 'dashed',
+    marginHorizontal: 4
+  },
+  detailBlock: { gap: 4, paddingHorizontal: 12 },
   detailLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   detailValue: { fontSize: 13, lineHeight: 18 },
 

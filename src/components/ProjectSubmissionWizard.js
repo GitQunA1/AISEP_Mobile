@@ -231,7 +231,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
     const newErrors = {};
 
     currentFields.forEach(name => {
-      const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+      const ruleKey = (name === 'industry' ? 'industryoptionid' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
       const rule = validationRules[ruleKey];
       if (rule) {
         const error = validationService.validateField(formData[name], rule, formData.developmentStage);
@@ -396,11 +396,13 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         return (
           <FadeInView key="step1">
             <Text style={[styles.stepTitle, { color: colors.text }]}>1. Thông tin cơ bản</Text>
-            {renderInput('Tên dự án *', 'projectName', 'Nhập tên dự án...')}
-            {renderInput('Mô tả ngắn *', 'shortDescription', 'Tóm tắt dự án trong 1-2 câu...', true)}
+            {renderInput('Tên dự án', 'projectName', 'Nhập tên dự án...')}
+            {renderInput('Mô tả ngắn', 'shortDescription', 'Tóm tắt dự án trong 1-2 câu...', true)}
             
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.secondaryText }]}>Lĩnh vực *</Text>
+              <Text style={[styles.label, { color: colors.secondaryText }]}>
+                Lĩnh vực {validationRules?.['industryoptionid']?.required && <Text style={{ color: colors.error }}>*</Text>}
+              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.industryScroll}>
                 {industries.map(ind => (
                   <TouchableOpacity 
@@ -447,8 +449,8 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         return (
           <FadeInView key="step3">
             <Text style={[styles.stepTitle, { color: colors.text }]}>3. Giải pháp & Khách hàng</Text>
-            {renderInput('Vấn đề giải quyết *', 'problemStatement', 'Nêu rõ nỗi đau của khách hàng...', true)}
-            {renderInput('Giải pháp đề xuất *', 'solutionDescription', 'Sản phẩm của bạn giải quyết thế nào?', true)}
+            {renderInput('Vấn đề giải quyết', 'problemStatement', 'Nêu rõ nỗi đau của khách hàng...', true)}
+            {renderInput('Giải pháp đề xuất', 'solutionDescription', 'Sản phẩm của bạn giải quyết thế nào?', true)}
             {renderInput('Khách hàng mục tiêu', 'targetCustomers', 'Ai là người dùng lý tưởng?', true)}
             {renderInput('Điểm khác biệt (UVP)', 'uniqueValueProposition', 'Tại sao bạn khác biệt?', true)}
           </FadeInView>
@@ -467,7 +469,9 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         return (
           <FadeInView key="step5">
             <Text style={[styles.stepTitle, { color: colors.text }]}>5. Lộ trình & Tài liệu</Text>
-            <Text style={[styles.label, { color: colors.secondaryText, marginTop: 8 }]}>Giai đoạn phát triển *</Text>
+            <Text style={[styles.label, { color: colors.secondaryText, marginTop: 8 }]}>
+              Giai đoạn phát triển {validationRules?.['stageoptionid']?.required && <Text style={{ color: colors.error }}>*</Text>}
+            </Text>
             <View style={styles.selectRow}>
               {stages.map(s => (
                 <TouchableOpacity 
@@ -518,7 +522,9 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
              {/* Team Members List */}
              <View style={styles.teamContainer}>
                 <View style={styles.labelRow}>
-                  <Text style={[styles.label, { color: colors.text }]}>Thành viên đội <Text style={{ color: colors.error }}>*</Text></Text>
+                  <Text style={[styles.label, { color: colors.text }]}>
+                    Thành viên đội {validationRules?.['teammembers']?.required && <Text style={{ color: colors.error }}>*</Text>}
+                  </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={{ marginRight: 12, fontSize: 13, color: colors.secondaryText, fontWeight: '600' }}>
                       Tổng số: {formData.teamMembers.length}

@@ -133,7 +133,7 @@ class AIEvaluationService {
    */
   static async getProjectAnalysisHistory(projectId) {
     try {
-      const result = await apiClient.get(`/api/StartupAIAnalysis/${projectId}`);
+      const result = await apiClient.get(`/api/StartupAIAnalysis/${projectId}`, { params: { pageSize: 100 } });
       const rawData = result.data || result;
       const normalizedData = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
       
@@ -180,7 +180,7 @@ class AIEvaluationService {
    */
   static async getInvestorAnalysisHistory(projectId) {
     try {
-      const result = await apiClient.get(`/api/InvestorAIAnalysis/${projectId}`);
+      const result = await apiClient.get(`/api/InvestorAIAnalysis/${projectId}`, { params: { pageSize: 100 } });
       const rawData = result.data || result;
       const normalizedData = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
       

@@ -56,8 +56,13 @@ const FormInput = ({ label, name, value, onChangeText, validationRule, currentSt
     const isOverLimit = maxLength && currentLength > maxLength;
     const isUnderLimit = minLength && currentLength > 0 && currentLength < minLength;
 
-    // Force all fields to be required regardless of API rules
-    const isRequired = true;
+    // Determine if the field is required based on stage (matching DynamicInputField logic)
+    let isRequired = validationRule?.required;
+    if (currentStage !== null && currentStage !== undefined && validationRule?.stageOptionIds && validationRule.stageOptionIds.length > 0) {
+        const stageId = Number(currentStage);
+        const isStageInList = validationRule.stageOptionIds.some(id => Number(id) === stageId);
+        isRequired = isStageInList ? validationRule.required : !validationRule.required;
+    }
 
     const displayLabel = validationRule?.displayName || label || validationRule?.fieldKey || name;
 
@@ -135,7 +140,7 @@ const CustomSelect = ({ label, value, options, onValueChange, colors, error, opt
     return (
         <View style={styles.formGroup}>
             <Text style={[styles.label, { color: colors.text }]}>
-                {label} <Text style={{ color: colors.error }}>*</Text>
+                {label} {!optional && <Text style={{ color: colors.error }}>*</Text>}
             </Text>
             <TouchableOpacity 
                 style={[
@@ -458,6 +463,21 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
     };
 
 
+    // Helper to check if a field is required based on current stage
+    const isFieldRequired = (ruleKey) => {
+        if (!validationRules) return false;
+        const rule = validationRules[ruleKey.toLowerCase()];
+        if (!rule) return false;
+        
+        let required = rule.required;
+        if (formData.developmentStage !== '' && rule.stageOptionIds && rule.stageOptionIds.length > 0) {
+            const stageId = Number(formData.developmentStage);
+            const isStageInList = rule.stageOptionIds.some(id => Number(id) === stageId);
+            required = isStageInList ? rule.required : !rule.required;
+        }
+        return required;
+    };
+
     const validateStep = () => {
         if (!validationRules) return true;
 
@@ -472,27 +492,36 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
 
         currentFields.forEach(name => {
             const val = formData[name];
-            if (val === undefined || val === null || String(val).trim() === '') {
-                newErrors[name] = 'Trường này là bắt buộc nhập';
-            } else {
-                const ruleKey = (name === 'industry' ? 'industryoptionids' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
-                const rule = validationRules[ruleKey];
-                if (rule) {
-                    const error = validationService.validateField(val, rule, formData.developmentStage);
-                    if (error) newErrors[name] = error;
-                }
+            const ruleKey = (name === 'industry' ? 'industryoptionid' : (name === 'developmentStage' ? 'stageoptionid' : name)).toLowerCase();
+            const rule = validationRules[ruleKey];
+            
+            if (rule) {
+                const error = validationService.validateField(val, rule, formData.developmentStage);
+                if (error) newErrors[name] = error;
             }
         });
 
-        if (currentStep === 1 && !imagePreview) {
+        if (currentStep === 1 && !imagePreview && isFieldRequired('projectimagefile')) {
             newErrors.projectImageFile = 'Vui lòng chọn hình ảnh dự án';
         }
 
         if (currentStep === 3) {
-            // Validate scorecard fields
-            const requiredFields = ['teamSize', 'teamExperience', 'targetMarketSize', 'marketGrowth', 'productReadiness', 'ipProtection', 'barrierToEntry', 'currentTraction', 'runwayMonths'];
-            requiredFields.forEach(f => {
-                if (!formData.projectScorecard[f]) newErrors.scorecard = 'Vui lòng hoàn thành tất cả các mục đánh giá';
+            // Validate scorecard fields dynamically from rules
+            Object.keys(validationRules).forEach(ruleKey => {
+                const rule = validationRules[ruleKey];
+                // Scorecard fields are typically individual keys in the root project object or mapped here
+                // Check if this rule applies to a scorecard field in formData.projectScorecard
+                const scorecardFields = ['teamSize', 'teamExperience', 'targetMarketSize', 'marketGrowth', 'productReadiness', 'ipProtection', 'barrierToEntry', 'currentTraction', 'runwayMonths', 'hasTechnicalCofounder'];
+                
+                const fieldName = scorecardFields.find(f => f.toLowerCase() === ruleKey);
+                if (fieldName) {
+                    const val = formData.projectScorecard[fieldName];
+                    const error = validationService.validateField(val, rule, formData.developmentStage);
+                    if (error) {
+                        newErrors.scorecard = 'Vui lòng hoàn thành tất cả các mục đánh giá bắt buộc';
+                        newErrors[fieldName] = error;
+                    }
+                }
             });
         }
 
@@ -599,7 +628,9 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                                     <FormInput name="projectName" validationRule={validationRules?.['projectname']} currentStage={formData.developmentStage} label="Tên Dự Án" value={formData.projectName} onChangeText={handleInputChange} placeholder="Ví dụ: AI SEP" error={errors.projectName} colors={colors} />
                                     
                                     <View style={styles.formGroup}>
-                                        <Text style={[styles.label, { color: colors.text }]}>Hình Ảnh Dự Án <Text style={{ color: colors.error }}>*</Text></Text>
+                                        <Text style={[styles.label, { color: colors.text }]}>
+                                            Hình Ảnh Dự Án {isFieldRequired('projectimagefile') && <Text style={{ color: colors.error }}>*</Text>}
+                                        </Text>
                                         <TouchableOpacity style={[styles.imageUploadBtn, { borderColor: errors.projectImageFile ? colors.error : colors.border, backgroundColor: imagePreview ? 'transparent' : colors.mutedBackground }]} onPress={handleImagePick}>
                                             {imagePreview ? (
                                                 <View style={{ width: '100%', height: 180, borderRadius: 12, overflow: 'hidden' }}>
@@ -616,8 +647,8 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
                                     </View>
 
                                     <FormInput name="shortDescription" validationRule={validationRules?.['shortdescription']} currentStage={formData.developmentStage} label="Mô Tả Ngắn" value={formData.shortDescription} onChangeText={handleInputChange} placeholder="Tóm tắt về dự án..." multiline error={errors.shortDescription} colors={colors} />
-                                    <CustomSelect label="Giai Đoạn" value={formData.developmentStage} onValueChange={(val) => handleInputChange('developmentStage', val)} options={stages} error={errors.developmentStage} colors={colors} />
-                                    <CustomSelect label="Lĩnh Vực" value={formData.industry} onValueChange={(val) => handleInputChange('industry', val)} options={industries} error={errors.industry} colors={colors} />
+                                    <CustomSelect label="Giai Đoạn" value={formData.developmentStage} onValueChange={(val) => handleInputChange('developmentStage', val)} options={stages} error={errors.developmentStage} colors={colors} optional={!isFieldRequired('stageoptionid')} />
+                                    <CustomSelect label="Lĩnh Vực" value={formData.industry} onValueChange={(val) => handleInputChange('industry', val)} options={industries} error={errors.industry} colors={colors} optional={!isFieldRequired('industryoptionid')} />
                                     <FormInput name="problemStatement" validationRule={validationRules?.['problemstatement']} currentStage={formData.developmentStage} label="Vấn Đề" value={formData.problemStatement} onChangeText={handleInputChange} placeholder="Vấn đề dự án giải quyết là gì?" multiline error={errors.problemStatement} colors={colors} />
                                 </View>
                             )}

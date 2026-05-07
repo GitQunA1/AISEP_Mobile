@@ -157,7 +157,7 @@ export const projectSubmissionService = {
   },
 
   getAIAnalysisResults: async (projectId) => {
-    const response = await apiClient.get(`/api/StartupAIAnalysis/${projectId}`);
+    const response = await apiClient.get(`/api/StartupAIAnalysis/${projectId}`, { params: { pageSize: 100 } });
     return response;
   },
 

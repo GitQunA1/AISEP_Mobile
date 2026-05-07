@@ -13,7 +13,7 @@ export const validationService = {
    */
   getFormRules: async (formKey) => {
     try {
-      const response = await apiClient.get(`/api/form-validation-rules/${formKey}`);
+      const response = await apiClient.get(`/api/form-validation-rules/${formKey}`, { params: { pageSize: 100 } });
       const data = response?.data || response;
       
       if (!data) return null;
@@ -74,7 +74,7 @@ export const validationService = {
       arrayValue = [...new Set(value.split(',').map(s => s.trim()).filter(Boolean))];
     }
 
-    const val = String(value || '').trim();
+    const val = (value !== null && value !== undefined) ? String(value).trim() : '';
 
     // Determine if the field is required based on stage
     let isRequired = rule.required;
