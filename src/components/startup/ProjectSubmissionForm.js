@@ -332,10 +332,18 @@ export default function ProjectSubmissionForm({ visible, onClose, onSuccess, use
             if (!rules || Object.keys(rules).length === 0) {
                 throw new Error('Không thể tải dữ liệu cấu hình biểu mẫu.');
             }
+
+            // Filter out inactive industries/stages, but keep current one if editing
+            const finalIndustries = (fetchedIndustries || []).filter(i => 
+                i.isActive || (isEdit && String(i.value) === String(initialData?.industryOptionId || initialData?.industry))
+            );
+            const finalStages = (fetchedStages || []).filter(s => 
+                s.isActive || (isEdit && String(s.value) === String(getStageNumericValue(initialData?.developmentStage || initialData?.stage)))
+            );
             
             setValidationRules(rules);
-            setIndustries(fetchedIndustries || []);
-            setStages(fetchedStages || []);
+            setIndustries(finalIndustries);
+            setStages(finalStages);
         } catch (error) {
             console.error('Config fetch error:', error);
             setConfigError('Không thể tải cấu hình biểu mẫu. Vui lòng thử lại.');

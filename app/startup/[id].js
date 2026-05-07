@@ -629,14 +629,14 @@ export default function StartupDetailScreen() {
           {[
             {
               icon: <Ionicons name="trending-up-outline" size={18} color="#2D7EFF" />,
-              label: 'TÌNH HÌNH KD (TRACTION)',
+              label: 'TÌNH HÌNH KD',
               isPremium: true,
               value: scQuick ? scQuick.traction : '—',
               color: '#2D7EFF'
             },
             {
               icon: <Ionicons name="bar-chart-outline" size={18} color="#27AE60" />,
-              label: 'QUY MÔ TT (SCORECARD)',
+              label: 'QUY MÔ TT',
               isPremium: true,
               value: scQuick ? scQuick.market : '—',
               color: '#27AE60'
@@ -645,7 +645,11 @@ export default function StartupDetailScreen() {
               icon: <Ionicons name="flash" size={18} color="#F5A623" />,
               label: 'ĐIỂM AI POTENTIAL',
               isPremium: false,
-              value: project.startupPotentialScore || project.aiScore || '—',
+              value: (project.startupPotentialScore && !isNaN(project.startupPotentialScore)) 
+                ? project.startupPotentialScore 
+                : (project.aiScore && !isNaN(project.aiScore)) 
+                  ? project.aiScore 
+                  : '—',
               color: '#F5A623'
             },
           ].map((stat, index) => (

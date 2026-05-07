@@ -18,7 +18,8 @@ export const enumService = {
         const items = Array.isArray(response?.data) ? response.data : (response?.data?.items || []);
         return items.map(item => ({
           label: item.value || item.name || 'Unknown Industry',
-          value: item.id
+          value: item.id,
+          isActive: item.isActive ?? true
         }));
       }
 
@@ -27,7 +28,8 @@ export const enumService = {
         const items = Array.isArray(response?.data) ? response.data : (response?.data?.items || []);
         return items.map(item => ({
           label: item.value || item.name || 'Unknown Stage',
-          value: item.id
+          value: item.id,
+          isActive: item.isActive ?? true
         }));
       }
 

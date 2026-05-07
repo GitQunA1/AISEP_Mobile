@@ -86,6 +86,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
       setIsConfigLoading(true);
       setConfigError('');
       const formKey = initialData ? 'project.update' : 'project.create';
+      const isUpdate = !!initialData;
       const [rules, fetchedIndustries, fetchedStages] = await Promise.all([
         validationService.getFormRules(formKey),
         enumService.getEnumOptions('Industry'),
@@ -96,9 +97,17 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
         throw new Error('Không thể tải dữ liệu cấu hình từ máy chủ.');
       }
       
+      // Filter out inactive items, but keep current one if it's an update
+      const filteredIndustries = (fetchedIndustries || []).filter(i => 
+        i.isActive || (isUpdate && String(i.value) === String(initialData?.industryOptionId || initialData?.industry))
+      );
+      const filteredStages = (fetchedStages || []).filter(s => 
+        s.isActive || (isUpdate && String(s.value) === String(initialData?.stageOptionId || initialData?.developmentStage || initialData?.stage))
+      );
+
       setValidationRules(rules);
-      setIndustries(fetchedIndustries || []);
-      setStages(fetchedStages || []);
+      setIndustries(filteredIndustries);
+      setStages(filteredStages);
     } catch (error) {
       console.error('Error fetching config:', error);
       setConfigError('Không thể tải cấu hình biểu mẫu. Vui lòng kiểm tra kết nối mạng và thử lại.');
@@ -277,7 +286,7 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
           developmentStage: parseInt(data.developmentStage),
           marketSize: parseInt(data.marketSize) || 0,
           revenue: parseInt(data.revenue) || 0,
-          teamSize: parseInt(data.teamSize) || 0,
+          teamSize: data.teamSize,
           teamMembers: teamString,
           userId: user?.userId
         };
@@ -427,6 +436,10 @@ export default function ProjectSubmissionWizard({ user, onSuccess, onCancel, ini
 
             <View style={{ marginBottom: 12 }}>
               {renderInput('Địa điểm', 'location', 'Thành phố, Tỉnh thành...', false)}
+            </View>
+            
+            <View style={{ marginBottom: 12 }}>
+              {renderInput('Quy mô đội ngũ', 'teamSize', 'Số lượng thành viên sáng lập...', false)}
             </View>
             
             <View style={styles.row}>

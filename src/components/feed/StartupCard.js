@@ -17,6 +17,8 @@ import followerService from '../../services/followerService';
 // Import modals
 import InvestmentModal from '../common/InvestmentModal';
 import RequestInfoModal from '../common/RequestInfoModal';
+// Import scorecard utilities
+import { getScorecardQuickStats } from '../../constants/projectScorecard';
 
 const AVATAR_PALETTE = [
   '#E05252', // coral red
@@ -100,7 +102,7 @@ const AIScoreBadge = React.memo(({ score, colors }) => {
   // Default (Updating/Unknown)
   let bgColor = 'rgba(120, 120, 140, 0.12)';
   let textColor = colors.secondaryText;
-  let label = !isNull ? String(score) : '__';
+  let label = (!isNull && !isNaN(score)) ? String(score) : '__';
   let borderColor = 'rgba(120, 120, 140, 0.25)';
 
   if (!isNull) {
@@ -146,9 +148,7 @@ const AIScoreBadge = React.memo(({ score, colors }) => {
 
 const DetailRows = React.memo(({ project, colors, isUnlocked, isPremium: hasSub }) => {
   const DETAIL_ROWS = [
-    { label: 'Mô hình KD', field: 'businessModel', isPremium: true },
     { label: 'Khách hàng', field: 'targetCustomers', isPremium: false },
-    { label: 'Giá trị', field: 'uniqueValueProposition', isPremium: false },
   ];
 
   return (
@@ -223,6 +223,7 @@ const StartupCard = React.memo(({
 
   const startupNameDisp = startup.startupName || startup.organizationName || startup.companyName || 'Startup';
   const scoreValue = startup.aiScore; // Could be null
+  const scQuick = getScorecardQuickStats(startup);
 
   return (
     <View style={[
@@ -299,16 +300,16 @@ const StartupCard = React.memo(({
         <View style={{ gap: 6, marginBottom: 14 }}>
           {[
             {
-              label: 'Doanh thu',
-              value: startup.revenue,
+              label: 'Tình hình KD',
+              value: scQuick?.traction,
               color: colors.accentCyan,
-              formatter: (v) => v > 0 ? `${(v / 1000000).toLocaleString('vi-VN')}M` : '0 đ'
+              formatter: (v) => v || '—'
             },
             {
-              label: 'Thị trường',
-              value: startup.marketSize,
+              label: 'Quy mô TT',
+              value: scQuick?.market,
               color: colors.accentGreen,
-              formatter: (v) => v > 0 ? `${(v / 1000000).toLocaleString('vi-VN')}VND` : '0 đ'
+              formatter: (v) => v || '—'
             },
             {
               label: 'Đối thủ chính',
@@ -343,17 +344,6 @@ const StartupCard = React.memo(({
         {/* DETAIL ROWS */}
         <DetailRows project={startup} colors={colors} isUnlocked={isUnlocked} isPremium={hasSub} />
 
-        {/* TEAM ROW */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-          <Text allowFontScaling={false} style={{ width: 100, flexShrink: 0, color: colors.secondaryText, fontSize: 12, fontWeight: '600' }}>
-            Team:
-          </Text>
-          {isUnlocked || (startup.teamMembers !== undefined && startup.teamMembers !== null) ? (
-            <Text allowFontScaling={false} style={{ flex: 1, color: colors.text, fontSize: 12 }}>{startup.teamMembers || 'Chưa cập nhật'}</Text>
-          ) : (
-            <PremiumLockText colors={colors} canUnlock={hasSub} />
-          )}
-        </View>
 
       </TouchableOpacity>
 

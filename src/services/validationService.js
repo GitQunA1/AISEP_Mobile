@@ -121,18 +121,18 @@ export const validationService = {
     }
     
     // Min value check
-    if (rule.minValue !== undefined && rule.minValue !== null) {
+    if (rule.minValue !== undefined && rule.minValue !== null && val !== '') {
         const numVal = Number(val);
-        if (isNaN(numVal) || numVal < rule.minValue) {
-            return `Giá trị tối thiểu là ${rule.minValue}`;
+        if (!isNaN(numVal) && numVal < rule.minValue) {
+            return rule.minValueMessage || `Giá trị tối thiểu là ${rule.minValue}`;
         }
     }
     
     // Max value check
-    if (rule.maxValue !== undefined && rule.maxValue !== null) {
+    if (rule.maxValue !== undefined && rule.maxValue !== null && val !== '') {
         const numVal = Number(val);
-        if (isNaN(numVal) || numVal > rule.maxValue) {
-            return `Giá trị tối đa là ${rule.maxValue}`;
+        if (!isNaN(numVal) && numVal > rule.maxValue) {
+            return rule.maxValueMessage || `Giá trị tối đa là ${rule.maxValue}`;
         }
     }
 
